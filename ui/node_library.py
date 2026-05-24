@@ -460,6 +460,9 @@ NODE_PRINT = {
 # 输入文本
 NODE_INPUT = {
     "name": "输入文本",
+    "inline_widgets": [
+        {"type": "line_edit", "name": "text", "default": "", "label": "输入"},
+    ],
     "code": '''def run(inputs):
     """直接输出输入的文本。"""
     text = inputs.get("text", "")

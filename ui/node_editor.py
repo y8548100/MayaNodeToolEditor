@@ -120,6 +120,11 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         self.setSceneRect(-2000, -2000, 4000, 4000)
         self.setBackgroundBrush(QtGui.QColor("#1E1E1E"))
 
+        # 撤销/重做管理器引用（由 MainWindow 设置）
+        self.undo_manager = None
+        self._undo_prev_state = None
+        self._undo_nest_counter = 0
+
     # ========== 拖拽放置 (从节点库拖入) ==========
 
     def dragEnterEvent(self, event: QtWidgets.QGraphicsSceneDragDropEvent) -> None:
@@ -186,6 +191,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
     # ========== 添加/移除节点 ==========
 
     def add_node_widget(self, node: NodeModel) -> NodeWidget:
+        self._save_undo_point()
         self.graph.add_node(node)
         widget = NodeWidget(node, self)
         self.addItem(widget)
@@ -194,6 +200,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         # 连接内嵌控件变化信号
         widget._relay.widget_changed.connect(self._on_widget_changed)
 
+        self._commit_undo(f"添加节点 {node.name}")
         return widget
 
     def ensure_start_node(self) -> NodeWidget:
@@ -219,6 +226,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         widget = self.widget_map.get(node_id)
         if widget and widget.node.is_start_node:
             return  # 起始节点不可删除
+        self._save_undo_point()
         widget = self.widget_map.pop(node_id, None)
         if widget:
             # 断开信号连接
@@ -238,6 +246,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
             self.remove_connection_line(cid)
 
         self.graph.remove_node(node_id)
+        self._commit_undo("删除节点")
         self.graph_changed.emit()
 
     # ========== 添加/移除连线 ==========
@@ -260,22 +269,28 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         if not src_socket or not tgt_socket:
             if src_is_start:
                 # 起始节点允许无插口匹配的连接（用于标记执行树）
+                self._save_undo_point()
                 self.graph.add_connection(conn)
+                self._commit_undo("添加连线")
                 self.graph_changed.emit()
                 return
             return
 
+        self._save_undo_point()
         self.graph.add_connection(conn)
         line = ConnectionLine(conn, src_socket, tgt_socket)
         self.addItem(line)
         self.connection_lines[conn.conn_id] = line
+        self._commit_undo("添加连线")
         self.graph_changed.emit()
 
     def remove_connection_line(self, conn_id: str) -> None:
+        self._save_undo_point()
         line = self.connection_lines.pop(conn_id, None)
         if line:
             self.removeItem(line)
         self.graph.remove_connection(conn_id)
+        self._commit_undo("删除连线")
         self.graph_changed.emit()
 
     # ========== 辅助方法 ==========
@@ -396,20 +411,24 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         if len(selected) < 1:
             return None
 
+        self._save_undo_point()
         group = GroupBox(group_name)
         for w in selected:
             group.add_child(w.node.node_id)
         group.recalc_rect(self)
         self.addItem(group)
         self.group_boxes.append(group)
+        self._commit_undo(f"分组 {group_name}")
         self.graph_changed.emit()
         return group
 
     def ungroup(self, group_box: GroupBox) -> None:
         """解组分組。"""
         if group_box in self.group_boxes:
+            self._save_undo_point()
             self.group_boxes.remove(group_box)
             self.removeItem(group_box)
+            self._commit_undo("解组")
             self.graph_changed.emit()
 
     def find_group_at(self, pos: QPointF) -> Optional[GroupBox]:
@@ -474,6 +493,62 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         else:
             self._search_index = (self._search_index - 1) % len(self._search_matches)
         self._highlight_search(clear_first=True)
+
+    # ========== 撤销/重做快照 (Fix: Ctrl+Z) ==========
+
+    def _save_undo_point(self) -> None:
+        """保存当前图状态作为 undo 快照起点（支持嵌套调用）。"""
+        if self.undo_manager is not None:
+            if self._undo_nest_counter == 0:
+                self._undo_prev_state = self.graph.to_dict()
+            self._undo_nest_counter += 1
+
+    def _commit_undo(self, description: str = "") -> None:
+        """提交 undo 快照（从 _save_undo_point 到当前状态的变化）。"""
+        if self.undo_manager is not None:
+            self._undo_nest_counter -= 1
+            if self._undo_nest_counter == 0 and self._undo_prev_state is not None:
+                curr = self.graph.to_dict()
+                if self._undo_prev_state != curr:
+                    from MayaNodeToolEditor.core.undo_manager import SnapshotCommand
+                    cmd = SnapshotCommand(self._undo_prev_state, curr, description)
+                    self.undo_manager.execute(cmd)
+                self._undo_prev_state = None
+
+    def restore_graph_from_dict(self, state: Dict[str, Any]) -> None:
+        """完全替换图状态（undo/redo 快照恢复，不触发快照）。"""
+        from MayaNodeToolEditor.core.node_graph import NodeGraph
+        from MayaNodeToolEditor.ui.node_widget import NodeWidget
+
+        # 清空当前场景项（保留背景）
+        self.clear()
+        self.widget_map.clear()
+        self.connection_lines.clear()
+        self.group_boxes.clear()
+
+        # 加载新图
+        self.graph = NodeGraph.from_dict(state)
+
+        # 重建所有节点 widget
+        for node in self.graph.nodes.values():
+            widget = NodeWidget(node, self)
+            self.addItem(widget)
+            self.widget_map[node.node_id] = widget
+            widget._relay.widget_changed.connect(self._on_widget_changed)
+
+        # 重建所有连线
+        for conn in self.graph.connections.values():
+            src_w = self.widget_map.get(conn.source_node_id)
+            tgt_w = self.widget_map.get(conn.target_node_id)
+            if src_w and tgt_w:
+                src_sock = self._find_socket(src_w, conn.source_socket, is_output=True)
+                tgt_sock = self._find_socket(tgt_w, conn.target_socket, is_output=False)
+                if src_sock and tgt_sock:
+                    line = ConnectionLine(conn, src_sock, tgt_sock)
+                    self.addItem(line)
+                    self.connection_lines[conn.conn_id] = line
+
+        self.graph_changed.emit()
 
     # ========== 复制/粘贴 ==========
 

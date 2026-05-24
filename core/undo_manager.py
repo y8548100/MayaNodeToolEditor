@@ -156,6 +156,22 @@ class EditNodeCommand(UndoCommand):
             scene.add_connection_line(conn)
 
 
+class SnapshotCommand(UndoCommand):
+    """快照命令 — 保存图的前后完整状态用于撤销/重做。"""
+
+    def __init__(self, prev_state: Dict[str, Any],
+                 next_state: Dict[str, Any], description: str = "") -> None:
+        super().__init__(description)
+        self.prev_state = prev_state
+        self.next_state = next_state
+
+    def undo(self, scene: NodeEditorScene) -> None:
+        scene.restore_graph_from_dict(self.prev_state)
+
+    def redo(self, scene: NodeEditorScene) -> None:
+        scene.restore_graph_from_dict(self.next_state)
+
+
 class UndoManager:
     """撤销/重做管理器。"""
 
@@ -167,8 +183,7 @@ class UndoManager:
         self._redo_stack: List[UndoCommand] = []
 
     def execute(self, command: UndoCommand) -> None:
-        """执行一个命令并压入撤销栈。"""
-        command.redo(self.scene)
+        """执行一个命令并压入撤销栈（不调 redo — 操作已执行）。"""
         self._undo_stack.append(command)
         self._redo_stack.clear()
         if len(self._undo_stack) > self.max_stack:

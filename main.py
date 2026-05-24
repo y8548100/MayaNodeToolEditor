@@ -45,6 +45,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # 撤销/重做 (Phase 7)
         from MayaNodeToolEditor.core.undo_manager import UndoManager
         self.undo_manager = UndoManager(self.scene)
+        self.scene.undo_manager = self.undo_manager  # 让 scene 也能 push 快照
         self._undo_timer = QTimer()
         self._undo_timer.setSingleShot(True)
         self._undo_timer.setInterval(100)
@@ -529,6 +530,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene.connection_lines.clear()
         self.scene.group_boxes.clear()
         self.scene.clear()
+        # 清理撤销栈
+        self.undo_manager._undo_stack.clear()
+        self.undo_manager._redo_stack.clear()
+        self._update_undo_menu_text()
         # 创建起始节点
         self.scene.ensure_start_node()
         self._current_file = None
@@ -566,6 +571,10 @@ class MainWindow(QtWidgets.QMainWindow):
             graph = NodeGraph.load(path)
             self._new_graph()
             self.scene.graph = graph
+            # 清理撤销栈（加载新图后撤销栈应该清空）
+            self.undo_manager._undo_stack.clear()
+            self.undo_manager._redo_stack.clear()
+            self._update_undo_menu_text()
             for node in graph.nodes.values():
                 self.scene.add_node_widget(node)
             for conn in graph.connections.values():
