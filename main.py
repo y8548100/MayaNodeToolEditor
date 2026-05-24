@@ -3,18 +3,19 @@ from __future__ import annotations
 MayaNodeToolEditor — Maya 内可视化代码节点编辑器入口。
 """
 
+import json
 import os
 import sys
 from typing import Any, Dict, List, Optional
 
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt
+from PySide2.QtCore import Qt, QTimer
 
 from MayaNodeToolEditor.core.node import Node, Connection as ConnModel
 from MayaNodeToolEditor.core.node_graph import NodeGraph
 from MayaNodeToolEditor.core.executor import Executor
 from MayaNodeToolEditor.core.types import DataType, SocketDirection
-from MayaNodeToolEditor.ui.node_editor import NodeEditorScene, NodeEditorView
+from MayaNodeToolEditor.ui.node_editor import NodeEditorScene, NodeEditorView, SearchBarWidget
 from MayaNodeToolEditor.ui.node_library import NodeLibraryWidget
 from MayaNodeToolEditor.ui.node_widget import NodeWidget
 from MayaNodeToolEditor.ui.code_editor import CodeEditorDialog
@@ -27,12 +28,27 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Maya 代码节点工具 v0.2")
+        self.setWindowTitle("Maya 代码节点工具 v0.3")
         self.setMinimumSize(1200, 700)
         self._setup_style()
         self._setup_ui()
         self._setup_menu()
         self._current_file: Optional[str] = None
+
+        # 实时联动防抖定时器 (Phase 1)
+        self._reactive_timer = QTimer()
+        self._reactive_timer.setSingleShot(True)
+        self._reactive_timer.setInterval(300)  # 300ms 防抖
+        self._reactive_timer.timeout.connect(self._do_reactive_execute)
+        self._pending_reactive_node: Optional[str] = None
+
+        # 撤销/重做 (Phase 7)
+        from MayaNodeToolEditor.core.undo_manager import UndoManager
+        self.undo_manager = UndoManager(self.scene)
+        self._undo_timer = QTimer()
+        self._undo_timer.setSingleShot(True)
+        self._undo_timer.setInterval(100)
+        self._undo_timer.timeout.connect(self._update_undo_menu_text)
 
     def _setup_style(self) -> None:
         self.setStyleSheet("""
@@ -55,7 +71,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene = NodeEditorScene(self)
         self.scene.node_double_clicked.connect(self._on_node_double_click)
         self.scene.node_run_requested.connect(self._on_node_run_requested)
+        self.scene.inline_widget_changed.connect(self._on_inline_widget_changed)
+        self.scene.graph_changed.connect(self._on_graph_changed)
         self.view = NodeEditorView(self.scene, self)
+
+        # 搜索栏 (Phase 8)
+        self.search_bar = SearchBarWidget()
+        self.search_bar.search_requested.connect(self._on_search)
+        self.search_bar.cycle_forward.connect(self._on_search_next)
+        self.search_bar.cycle_backward.connect(self._on_search_prev)
+        self.search_bar.close_requested.connect(self._on_search_close)
+        self.search_bar.hide()
+
+        # 搜索快捷键
+        search_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
+        search_shortcut.activated.connect(self._show_search_bar)
 
         # 节点库
         self.library = NodeLibraryWidget(self)
@@ -79,13 +109,24 @@ class MainWindow(QtWidgets.QMainWindow):
         """)
 
         # 布局
+        central = QtWidgets.QWidget()
+        central_layout = QtWidgets.QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+
+        # 搜索栏在最上
+        central_layout.addWidget(self.search_bar)
+
+        # 主分割器
         splitter = QtWidgets.QSplitter(Qt.Horizontal)
         splitter.addWidget(self.sidebar)
         splitter.addWidget(self.view)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 940])
-        self.setCentralWidget(splitter)
+        central_layout.addWidget(splitter, 1)
+
+        self.setCentralWidget(central)
 
         self.status_bar = self.statusBar()
         self.status_bar.showMessage("就绪 — 从节点库拖入或双击添加节点，工具收藏里双击加载预置工具")
@@ -93,7 +134,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _setup_menu(self) -> None:
         menubar = self.menuBar()
 
-        # 文件菜单
+        # ====== 文件菜单 ======
         file_menu = menubar.addMenu("文件(&F)")
 
         new_action = QtWidgets.QAction("新建(&N)", self)
@@ -130,21 +171,256 @@ class MainWindow(QtWidgets.QMainWindow):
         export_action.triggered.connect(self._export_script)
         file_menu.addAction(export_action)
 
-        # 编辑菜单
+        # ====== 编辑菜单 ======
         edit_menu = menubar.addMenu("编辑(&E)")
+
+        # 撤销/重做 (Phase 7)
+        self.undo_action = QtWidgets.QAction("撤销(&Z)", self)
+        self.undo_action.setShortcut("Ctrl+Z")
+        self.undo_action.triggered.connect(self._undo)
+        self.undo_action.setEnabled(False)
+        edit_menu.addAction(self.undo_action)
+
+        self.redo_action = QtWidgets.QAction("重做(&Y)", self)
+        self.redo_action.setShortcut("Ctrl+Shift+Z")
+        self.redo_action.triggered.connect(self._redo)
+        self.redo_action.setEnabled(False)
+        edit_menu.addAction(self.redo_action)
+
+        edit_menu.addSeparator()
+
+        # 复制/粘贴 (Phase 3)
+        copy_action = QtWidgets.QAction("复制(&C)", self)
+        copy_action.setShortcut("Ctrl+C")
+        copy_action.triggered.connect(self._copy_selected)
+        edit_menu.addAction(copy_action)
+
+        paste_action = QtWidgets.QAction("粘贴(&V)", self)
+        paste_action.setShortcut("Ctrl+V")
+        paste_action.triggered.connect(self._paste_from_clipboard)
+        edit_menu.addAction(paste_action)
+
+        edit_menu.addSeparator()
 
         delete_action = QtWidgets.QAction("删除选中(&D)", self)
         delete_action.setShortcut("Delete")
         delete_action.triggered.connect(self._delete_selected)
         edit_menu.addAction(delete_action)
 
-        # 运行菜单
+        # ====== 选择菜单 ======
+        select_menu = menubar.addMenu("选择(&S)")
+        select_all_action = QtWidgets.QAction("全选(&A)", self)
+        select_all_action.setShortcut("Ctrl+A")
+        select_all_action.triggered.connect(self._select_all)
+        select_menu.addAction(select_all_action)
+
+        # ====== 运行菜单 ======
         run_menu = menubar.addMenu("运行(&R)")
 
         run_action = QtWidgets.QAction("执行节点图(&X)", self)
         run_action.setShortcut("F5")
         run_action.triggered.connect(self._execute_graph)
         run_menu.addAction(run_action)
+
+        # ====== 分组菜单 ======
+        group_menu = menubar.addMenu("分组(&G)")
+
+        group_action = QtWidgets.QAction("分组选中节点(&G)", self)
+        group_action.setShortcut("Ctrl+G")
+        group_action.triggered.connect(self._group_selected)
+        group_menu.addAction(group_action)
+
+    # ========== Phase 1: 实时联动 ==========
+
+    def _on_inline_widget_changed(self, node_id: str, widget_name: str) -> None:
+        """内嵌控件变化时启动防抖定时器。"""
+        self._pending_reactive_node = node_id
+        self._reactive_timer.start()
+
+    def _do_reactive_execute(self) -> None:
+        """防抖到期后执行实时联动。"""
+        if self._pending_reactive_node is None:
+            return
+
+        node_id = self._pending_reactive_node
+        self._pending_reactive_node = None
+
+        # 收集所有内嵌控件值
+        inline_values = self.scene.collect_all_inline_values()
+
+        # 获取下游节点
+        downstream = self.scene.get_downstream_nodes(node_id)
+        if not downstream:
+            return  # 没有下游，无需执行
+
+        try:
+            executor = Executor(self.scene.graph)
+
+            # 执行所有下游节点
+            for dn_id in downstream:
+                dn_node = self.scene.graph.get_node(dn_id)
+                if dn_node is None:
+                    continue
+
+                # 收集该节点输入
+                inputs = {}
+                for sock in dn_node.inputs:
+                    connected = [
+                        c for c in self.scene.graph.connections.values()
+                        if c.target_node_id == dn_id
+                        and c.target_socket == sock.name
+                    ]
+                    if connected and connected[0].source_node_id in executor.results:
+                        upstream_data = executor.results.get(connected[0].source_node_id, {})
+                        upstream_val = upstream_data.get(connected[0].source_socket)
+                        inputs[sock.name] = upstream_val if upstream_val is not None else sock.default_value
+                    elif connected:
+                        inputs[sock.name] = sock.default_value
+                    else:
+                        inputs[sock.name] = sock.default_value
+
+                # 合并内嵌控件值
+                dn_inline = inline_values.get(dn_id, {})
+                inputs.update(dn_inline)
+
+                # 只有 text_display 节点允许空代码执行
+                has_display = any(
+                    cfg.get("type") == "text_display"
+                    for cfg in dn_node.inline_widgets
+                )
+                if not dn_node.code.strip() and not has_display:
+                    continue
+
+                # 执行
+                if dn_node.exec_mode == "ui":
+                    result = executor._run_ui_node(dn_node, inputs)
+                else:
+                    result = executor._run_node(dn_node, inputs)
+                executor.results[dn_id] = result or {}
+
+            # 更新显示控件
+            self._update_inline_displays(executor.results)
+
+            # 更新状态栏摘要
+            updated = len(executor.results) - 1  # 减去源节点
+            if updated > 0:
+                self.status_bar.showMessage(f"⚡ 实时联动: 更新了 {updated} 个下游节点")
+
+        except Exception as e:
+            # 实时联动失败不弹窗，只在状态栏显示
+            self.status_bar.showMessage(f"⚠️ 联动执行出错: {e}")
+
+    # ========== Phase 8: 节点搜索 ==========
+
+    def _show_search_bar(self) -> None:
+        """显示搜索栏并聚焦输入框。"""
+        self.search_bar.show()
+        self.search_bar.search_input.setFocus()
+        self.search_bar.search_input.selectAll()
+
+    def _on_search(self, query: str) -> None:
+        """搜索框文本变化时执行搜索。"""
+        matches = self.scene.search_nodes(query)
+        if matches:
+            self.search_bar.update_count(0, len(matches))
+        else:
+            self.search_bar.update_count(0, 0)
+
+    def _on_search_next(self) -> None:
+        """搜索下一个匹配。"""
+        self.scene.cycle_search(forward=True)
+        idx = self.scene._search_index
+        total = len(self.scene._search_matches)
+        self.search_bar.update_count(idx, total)
+
+    def _on_search_prev(self) -> None:
+        """搜索上一个匹配。"""
+        self.scene.cycle_search(forward=False)
+        idx = self.scene._search_index
+        total = len(self.scene._search_matches)
+        self.search_bar.update_count(idx, total)
+
+    def _on_search_close(self) -> None:
+        """关闭搜索栏。"""
+        self.search_bar.hide()
+        self.search_bar.search_input.clear()
+        self.scene.search_nodes("")
+
+    # ========== Phase 7: 撤销/重做 ==========
+
+    def _on_graph_changed(self) -> None:
+        """图变化时更新撤销菜单状态。"""
+        self._undo_timer.start()
+
+    def _update_undo_menu_text(self) -> None:
+        """更新撤销/重做菜单文本。"""
+        if self.undo_manager.can_undo:
+            self.undo_action.setText(f"撤销 ({self.undo_manager.undo_description()})")
+            self.undo_action.setEnabled(True)
+        else:
+            self.undo_action.setText("撤销")
+            self.undo_action.setEnabled(False)
+
+        if self.undo_manager.can_redo:
+            self.redo_action.setText(f"重做 ({self.undo_manager.redo_description()})")
+            self.redo_action.setEnabled(True)
+        else:
+            self.redo_action.setText("重做")
+            self.redo_action.setEnabled(False)
+
+    def _undo(self) -> None:
+        """执行撤销。"""
+        cmd = self.undo_manager.undo()
+        if cmd:
+            self.status_bar.showMessage(f"↩️ 撤销: {cmd.description}")
+            self._update_undo_menu_text()
+
+    def _redo(self) -> None:
+        """执行重做。"""
+        cmd = self.undo_manager.redo()
+        if cmd:
+            self.status_bar.showMessage(f"↪️ 重做: {cmd.description}")
+            self._update_undo_menu_text()
+
+    # ========== Phase 3: 复制/粘贴 ==========
+
+    def _copy_selected(self) -> None:
+        """复制选中节点到剪贴板。"""
+        text = self.scene.copy_selected_nodes()
+        if text:
+            try:
+                clipboard = QtGui.QGuiApplication.clipboard()
+                clipboard.setText(text)
+                self.status_bar.showMessage("📋 已复制到剪贴板")
+            except Exception:
+                pass
+
+    def _paste_from_clipboard(self) -> None:
+        """从剪贴板粘贴节点。"""
+        try:
+            clipboard = QtGui.QGuiApplication.clipboard()
+            text = clipboard.text()
+            new_ids = self.scene.paste_nodes(text)
+            if new_ids:
+                self.status_bar.showMessage(f"📋 已粘贴 {len(new_ids)} 个节点")
+        except Exception as e:
+            self.status_bar.showMessage(f"⚠️ 粘贴失败: {e}")
+
+    def _select_all(self) -> None:
+        """全选所有节点。"""
+        for widget in self.scene.widget_map.values():
+            widget.setSelected(True)
+        self.status_bar.showMessage(f"已选中 {len(self.scene.widget_map)} 个节点")
+
+    # ========== 分组 (Phase 4) ==========
+
+    def _group_selected(self) -> None:
+        """将选中的节点分组。"""
+        group = self.scene.group_selected_nodes("分组")
+        if group:
+            self.status_bar.showMessage(f"📦 已创建分组 ({len(group.child_nodes)} 个节点)")
+        else:
+            self.status_bar.showMessage("请先选中至少一个节点")
 
     # ========== 节点操作 ==========
 
@@ -161,6 +437,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # UI 节点用不同颜色
         if exec_mode == "ui":
             node.color = "#3A6EA5"
+        elif node.inline_widgets:
+            node.color = "#3A6EA5"  # 内嵌控件节点也用蓝色
 
         for inp in template.get("inputs", []):
             node.add_input(
@@ -182,7 +460,7 @@ class MainWindow(QtWidgets.QMainWindow):
         node.pos_y = random.randint(-300, 300)
 
         self.scene.add_node_widget(node)
-        self.status_bar.showMessage(f"已添加节点: {node.name}")
+        self.status_bar.showMessage(f"已添加节点 {node.name}")
 
     def _on_node_double_click(self, node_id: str) -> None:
         node = self.scene.graph.get_node(node_id)
@@ -191,7 +469,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = CodeEditorDialog(node, self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self._refresh_node_widget(node_id)
-            self.status_bar.showMessage(f"已更新节点: {node.name}")
+            self.status_bar.showMessage(f"已更新节点 {node.name}")
 
     def _refresh_node_widget(self, node_id: str) -> None:
         widget = self.scene.widget_map.get(node_id)
@@ -210,7 +488,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if isinstance(item, NodeWidget):
                 node_id = item.node.node_id
                 self.scene.remove_node_widget(node_id)
-                self.status_bar.showMessage(f"已删除节点: {item.node.name}")
+                self.status_bar.showMessage(f"已删除节点 {item.node.name}")
 
     # ========== 文件操作 ==========
 
@@ -223,19 +501,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status_bar.showMessage("新建节点图")
 
     def _save_graph(self) -> None:
+        # Phase 2: 先持久化控件值再保存
+        self.scene.persist_all_inline_values()
+
         if self._current_file:
             self.scene.graph.save(self._current_file)
-            self.status_bar.showMessage(f"已保存: {self._current_file}")
+            self.status_bar.showMessage(f"已保存 {self._current_file}")
         else:
             self._save_graph_as()
 
     def _save_graph_as(self) -> None:
+        # Phase 2: 先持久化控件值再保存
+        self.scene.persist_all_inline_values()
+
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "保存节点图", "", "节点图文件 (*.pngraph)")
         if path:
             self.scene.graph.save(path)
             self._current_file = path
-            self.status_bar.showMessage(f"已保存: {path}")
+            self.status_bar.showMessage(f"已保存 {path}")
 
     def _open_graph(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -252,8 +536,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.scene.add_node_widget(node)
             for conn in graph.connections.values():
                 self.scene.add_connection_line(conn)
+            # Phase 2: 加载后恢复内嵌控件值
+            self.scene.restore_inline_values()
             self._current_file = path
-            self.status_bar.showMessage(f"已加载: {path}")
+            self.status_bar.showMessage(f"已加载 {path}")
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "加载失败", str(e))
 
@@ -261,6 +547,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _save_as_tool(self) -> None:
         """将当前节点图收藏为工具。"""
+        # Phase 2: 先持久化控件值
+        self.scene.persist_all_inline_values()
+
         name, ok = QtWidgets.QInputDialog.getText(
             self, "收藏为工具", "工具名称:",
             text=self.scene.graph.name or "")
@@ -271,18 +560,16 @@ class MainWindow(QtWidgets.QMainWindow):
         safe_name = name.strip().replace("/", "_").replace("\\", "_")
         path = os.path.join(TOOLS_DIR, f"{safe_name}.pngraph")
 
-        # 保存工具描述
         graph_data = self.scene.graph.to_dict()
         graph_data["name"] = name.strip()
         graph_data["description"] = f"节点数: {len(graph_data['nodes'])}，连线数: {len(graph_data['connections'])}"
 
         try:
-            import json as _json
             with open(path, "w", encoding="utf-8") as f:
-                _json.dump(graph_data, f, ensure_ascii=False, indent=2)
+                json.dump(graph_data, f, ensure_ascii=False, indent=2)
             self.tools_panel.refresh_list()
-            self.sidebar.setCurrentIndex(1)  # 切换到工具收藏页
-            self.status_bar.showMessage(f"已收藏工具: {name}")
+            self.sidebar.setCurrentIndex(1)
+            self.status_bar.showMessage(f"已收藏工具 {name}")
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "收藏失败", str(e))
 
@@ -290,16 +577,11 @@ class MainWindow(QtWidgets.QMainWindow):
         """从工具收藏加载工具图。"""
         self._load_graph_file(path)
 
-    # ========== 执行与导出 ==========
+    # ========== 执行 ==========
 
     def _collect_inline_values(self) -> Dict[str, Dict[str, Any]]:
         """从场景中所有节点收集内嵌控件的值。"""
-        vals: Dict[str, Dict[str, Any]] = {}
-        for nid, widget in self.scene.widget_map.items():
-            inline = widget.get_all_inline_values()
-            if inline:
-                vals[nid] = inline
-        return vals
+        return self.scene.collect_all_inline_values()
 
     def _update_inline_displays(self, results: Dict[str, Dict[str, Any]]) -> None:
         """将执行结果更新到节点的内嵌显示控件（如打印节点的 text_display）。"""
@@ -310,15 +592,12 @@ class MainWindow(QtWidgets.QMainWindow):
             node = self.scene.graph.get_node(nid)
             if node is None:
                 continue
-            # 更新所有 text_display 类型的内嵌控件
             for cfg in node.inline_widgets:
                 if cfg.get("type") == "text_display":
                     name = cfg.get("name", "output")
-                    # 优先用 data 中同名 key，否则用第一个值
                     if name in data:
                         widget.set_inline_value(name, str(data[name]))
                     else:
-                        # 取第一个非系统字段的值
                         for k, v in data.items():
                             if k not in ("display", "_raw"):
                                 widget.set_inline_value(name, str(v))
@@ -328,7 +607,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _execute_graph(self) -> None:
         try:
-            # 收集内嵌控件值
             inline_values = self._collect_inline_values()
 
             executor = Executor(self.scene.graph)
@@ -350,9 +628,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 errors = "\n".join(executor.errors.values())
                 QtWidgets.QMessageBox.warning(self, "执行错误", errors)
             else:
+                output_text = "\n".join(output_lines)
                 QtWidgets.QMessageBox.information(
                     self, "执行完成",
-                    "所有节点执行成功！\n\n详细结果:\n" + "\n".join(output_lines))
+                    "所有节点执行成功！\n\n详细结果:\n" + output_text)
 
         except ValueError as e:
             QtWidgets.QMessageBox.warning(self, "执行失败", f"图结构错误: {e}")
@@ -368,7 +647,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if node is None:
             return
 
-        # 收集传入该节点的输入值
         inputs = {}
         for sock in node.inputs:
             connected = [
@@ -407,7 +685,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.status_bar.showMessage(f"▶ 已运行 UI 节点: {node.name}")
 
-            # 显示结果摘要
             if result:
                 result_str = ", ".join(f"{k}={v}" for k, v in result.items())
                 print(f"[NodeEditor] ▶ {node.name} → {result_str}")
@@ -429,7 +706,7 @@ class MainWindow(QtWidgets.QMainWindow):
             script = compile_to_script(self.scene.graph)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(script)
-            self.status_bar.showMessage(f"已导出: {path}")
+            self.status_bar.showMessage(f"已导出 {path}")
             QtWidgets.QMessageBox.information(
                 self, "导出成功", f"脚本已导出到:\n{path}")
         except Exception as e:
@@ -445,7 +722,7 @@ def launch() -> QtWidgets.QMainWindow:
     window = MainWindow()
     window.show()
 
-    # 防 GC：存到 __main__ 模块
+    # 防 GC：存在 __main__ 模块
     import __main__
     __main__._hermes_maya_window = window
 

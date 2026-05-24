@@ -100,7 +100,6 @@ NODE_GET_BLENDSHAPES = {
             return {"targets": []}
         targets = cmds.listAttr(bs_node, multi=True, string="weight") or []
         alias_list = cmds.aliasAttr(bs_node, query=True) or []
-        # 提取别名（变形目标名称）
         aliases = [alias_list[i] for i in range(0, len(alias_list), 2)] if alias_list else targets
         return {"targets": aliases if aliases else targets}
     except ImportError:
@@ -110,7 +109,7 @@ NODE_GET_BLENDSHAPES = {
     "outputs": [{"name": "targets", "type": "list", "desc": "变形目标列表"}],
 }
 
-# 获取选中变形目标
+# 获取所有BlendShape
 NODE_GET_SELECTED_BLENDSHAPES = {
     "name": "获取所有BlendShape",
     "code": '''def run(inputs):
@@ -269,7 +268,7 @@ NODE_EXECUTE_RENAME = {
         errors = []
         for old, new in zip(old_names, new_names):
             if not cmds.objExists(old):
-                errors.append(f"不存在: {old}")
+                errors.append(f"不存在 {old}")
                 continue
             if dry_run:
                 renamed.append(new)
@@ -291,7 +290,7 @@ NODE_EXECUTE_RENAME = {
     "inputs": [
         {"name": "old_names", "type": "list", "default": [], "desc": "旧名称列表"},
         {"name": "new_names", "type": "list", "default": [], "desc": "新名称列表"},
-        {"name": "dry_run", "type": "bool", "default": False, "desc": "仅预览不改"},
+        {"name": "dry_run", "type": "bool", "default": False, "desc": "仅预览不执行"},
     ],
     "outputs": [
         {"name": "renamed", "type": "list", "desc": "改名后的名称"},
@@ -477,7 +476,7 @@ NODE_UI_PROMPT_TEXT = {
     "code": '''def run(inputs):
     """弹窗让用户输入文本。"""
     title = inputs.get("title", "输入文本")
-    msg = inputs.get("message", "请输入:")
+    msg = inputs.get("message", "请输入")
     default = inputs.get("default", "")
     try:
         import maya.cmds as cmds
@@ -495,7 +494,7 @@ NODE_UI_PROMPT_TEXT = {
 ''',
     "inputs": [
         {"name": "title", "type": "string", "default": "输入文本", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "请输入:", "desc": "提示信息"},
+        {"name": "message", "type": "string", "default": "请输入", "desc": "提示信息"},
         {"name": "default", "type": "string", "default": "", "desc": "默认值"},
     ],
     "outputs": [{"name": "value", "type": "string", "desc": "用户输入的值"}],
@@ -506,7 +505,7 @@ NODE_UI_PROMPT_NUMBER = {
     "code": '''def run(inputs):
     """弹窗让用户输入数字。"""
     title = inputs.get("title", "输入数值")
-    msg = inputs.get("message", "请输入数字:")
+    msg = inputs.get("message", "请输入数值")
     default = inputs.get("default", 0)
     try:
         import maya.cmds as cmds
@@ -527,7 +526,7 @@ NODE_UI_PROMPT_NUMBER = {
 ''',
     "inputs": [
         {"name": "title", "type": "string", "default": "输入数值", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "请输入数字:", "desc": "提示信息"},
+        {"name": "message", "type": "string", "default": "请输入数值", "desc": "提示信息"},
         {"name": "default", "type": "float", "default": 0, "desc": "默认值"},
     ],
     "outputs": [{"name": "value", "type": "float", "desc": "用户输入的数值"}],
@@ -538,7 +537,7 @@ NODE_UI_CONFIRM = {
     "code": '''def run(inputs):
     """弹窗让用户确认/取消操作。"""
     title = inputs.get("title", "确认")
-    msg = inputs.get("message", "确定继续吗?")
+    msg = inputs.get("message", "确定继续？")
     try:
         import maya.cmds as cmds
         result = cmds.confirmDialog(
@@ -553,7 +552,7 @@ NODE_UI_CONFIRM = {
 ''',
     "inputs": [
         {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "确定继续吗?", "desc": "提示信息"},
+        {"name": "message", "type": "string", "default": "确定继续？", "desc": "提示信息"},
     ],
     "outputs": [
         {"name": "confirmed", "type": "bool", "desc": "用户是否确认"},
@@ -588,7 +587,7 @@ NODE_INLINE_NUMBER_INPUT = {
         {"type": "spin_box", "name": "value", "label": "数值", "default": 0, "min": -9999, "max": 9999},
     ],
     "inputs": [],
-    "outputs": [{"name": "value", "type": "int", "desc": "输入的数字"}],
+    "outputs": [{"name": "value", "type": "int", "desc": "输入的数值"}],
 }
 
 NODE_INLINE_SLIDER = {
@@ -634,7 +633,7 @@ NODE_INLINE_CHECKBOX = {
     "outputs": [{"name": "enabled", "type": "bool", "desc": "是否启用"}],
 }
 
-# 修改后的打印节点——带内嵌输出显示
+# 打印节点——带内嵌输出显示
 NODE_PRINT_WITH_DISPLAY = {
     "name": "打印信息",
     "code": '''def run(inputs):
@@ -652,6 +651,52 @@ NODE_PRINT_WITH_DISPLAY = {
         {"name": "output", "type": "string", "desc": "消息内容"},
     ],
 }
+
+# ====== Phase 5: 新内嵌控件节点 ======
+
+NODE_INLINE_COLOR_PICKER = {
+    "name": "颜色选择",
+    "code": '''def run(inputs):
+    """颜色选择源节点——内嵌颜色按钮，点击弹出颜色选择器。"""
+    color = inputs.get("color", "#4FC1FF")
+    return {"color": color}
+''',
+    "inline_widgets": [
+        {"type": "color_picker", "name": "color", "label": "颜色", "default": "#4FC1FF"},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex"}],
+}
+
+NODE_INLINE_FILE_BROWSER = {
+    "name": "文件浏览",
+    "code": '''def run(inputs):
+    """文件路径源节点——内嵌文件浏览器按钮。"""
+    path = inputs.get("path", "")
+    return {"path": path}
+''',
+    "inline_widgets": [
+        {"type": "file_browser", "name": "path", "label": "路径", "default": ""},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径"}],
+}
+
+NODE_INLINE_MULTILINE_TEXT = {
+    "name": "多行文本",
+    "code": '''def run(inputs):
+    """多行文本输入源节点。"""
+    text = inputs.get("text", "")
+    return {"text": text}
+''',
+    "inline_widgets": [
+        {"type": "plain_text", "name": "text", "label": "内容", "default": ""},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本"}],
+}
+
+# ====== 原 UI 弹窗节点（保持兼容） ======
 
 NODE_UI_POPUP = {
     "name": "弹出窗口",
@@ -703,7 +748,6 @@ NODE_UI_INPUT_FORM = {
     "exec_mode": "ui",
     "code": '''def run(inputs):
     """弹出表单窗口，支持多种控件类型。"""
-    # fields 由用户自己定义，这里从 inputs 读取预定义字段
     fields = inputs.get("fields", [
         {"name": "name", "label": "名称", "type": "string", "default": inputs.get("name", "")},
         {"name": "count", "label": "数量", "type": "int", "default": inputs.get("count", 1)},
@@ -729,7 +773,7 @@ NODE_UI_INPUT_FORM = {
 }
 
 NODE_UI_SLIDER = {
-    "name": "滑块输入",
+    "name": "滑块输入（弹窗）",
     "exec_mode": "ui",
     "code": '''def run(inputs):
     """弹出滑块窗口让用户调整数值。"""
@@ -762,7 +806,7 @@ NODE_UI_FILE_PICKER = {
     """弹出文件选择对话框。"""
     path = ui.show_file_picker(
         title=inputs.get("title", "选择文件"),
-        file_filter=inputs.get("file_filter", "所有文件 (*.*)"),
+        file_filter=inputs.get("file_filter", "所有文件(*.*)"),
         start_dir=inputs.get("start_dir", ""),
         mode=inputs.get("mode", "open"),
     )
@@ -770,7 +814,7 @@ NODE_UI_FILE_PICKER = {
 ''',
     "inputs": [
         {"name": "title", "type": "string", "default": "选择文件", "desc": "对话框标题"},
-        {"name": "file_filter", "type": "string", "default": "所有文件 (*.*)", "desc": "文件过滤"},
+        {"name": "file_filter", "type": "string", "default": "所有文件(*.*)", "desc": "文件过滤"},
         {"name": "start_dir", "type": "string", "default": "", "desc": "起始目录"},
         {"name": "mode", "type": "string", "default": "open", "desc": "模式: open/save/directory"},
     ],
@@ -820,37 +864,8 @@ NODE_UI_LIST_SELECTOR = {
     "outputs": [{"name": "selected", "type": "string", "desc": "选中的项目"}],
 }
 
-NODE_UI_CUSTOM_FORM = {
-    "name": "自定义表单",
-    "exec_mode": "ui",
-    "code": '''def run(inputs):
-    """弹出完全自定义的表单窗口。"""
-    fields = []
-    for i in range(10):
-        fname = inputs.get(f"field{i}_name", "")
-        ftype = inputs.get(f"field{i}_type", "string")
-        flabel = inputs.get(f"field{i}_label", fname)
-        fdefault = inputs.get(f"field{i}_default", "")
-        if not fname:
-            continue
-        field = {"name": fname, "label": flabel, "type": ftype, "default": fdefault}
-        if ftype == "combo":
-            opts_str = inputs.get(f"field{i}_options", "")
-            field["options"] = [o.strip() for o in opts_str.split(",") if o.strip()] or ["A", "B"]
-        fields.append(field)
-    result = ui.show_form(
-        title=inputs.get("title", "自定义表单"),
-        fields=fields or [{"name": "value", "label": "值", "type": "string", "default": ""}],
-    )
-    return result or {}
-''',
-    "inputs": [
-        {"name": "title", "type": "string", "default": "自定义表单", "desc": "窗口标题"},
-    ],
-    "outputs": [{"name": "value", "type": "string", "desc": "输出值"}],
-}
-
 # 构建节点库
+# 分类目录->节点列表
 BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
     "内嵌控件": [
         NODE_INLINE_TEXT_INPUT,
@@ -858,6 +873,9 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
         NODE_INLINE_SLIDER,
         NODE_INLINE_COMBO,
         NODE_INLINE_CHECKBOX,
+        NODE_INLINE_COLOR_PICKER,   # Phase 5 新增
+        NODE_INLINE_FILE_BROWSER,    # Phase 5 新增
+        NODE_INLINE_MULTILINE_TEXT,  # Phase 5 新增
     ],
     "工具": [
         NODE_PRINT_WITH_DISPLAY,
@@ -867,6 +885,15 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
         NODE_UI_PROMPT_TEXT,
         NODE_UI_PROMPT_NUMBER,
         NODE_UI_CONFIRM,
+    ],
+    "UI弹窗": [
+        NODE_UI_POPUP,
+        NODE_UI_CONFIRM_FORM,
+        NODE_UI_INPUT_FORM,
+        NODE_UI_SLIDER,
+        NODE_UI_FILE_PICKER,
+        NODE_UI_COLOR_PICKER,
+        NODE_UI_LIST_SELECTOR,
     ],
     "选择获取": [
         NODE_GET_SELECTED,
