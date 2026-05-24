@@ -608,6 +608,12 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             graph = NodeGraph.load(path)
             self._new_graph()
+            # 移除 _new_graph 自动创建的起点（加载的图自带起点）
+            for nid in list(self.scene.widget_map.keys()):
+                w = self.scene.widget_map[nid]
+                if w.node.is_start_node and w.node.node_id not in graph.nodes:
+                    self.scene.removeItem(w)
+                    del self.scene.widget_map[nid]
             self.scene.graph = graph
             # 清理撤销栈（加载新图后撤销栈应该清空）
             self.undo_manager._undo_stack.clear()
@@ -665,11 +671,13 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "收藏失败", str(e))
 
     def _load_tool(self, path: str) -> None:
-        """从工具收藏加载工具 — 在运行面板中打开（而非加载到画布）。"""
+        """从工具收藏加载工具 — 加载到编辑器画布（显示内部节点）。"""
+        self._load_graph_file(path)
+        # 同步加载到运行面板（方便切换运行）
         self.run_panel.set_tool(path)
-        self.sidebar.setCurrentIndex(2)  # 切换到运行面板
+        self.sidebar.setCurrentIndex(0)  # 切换到编辑器画布
         name = os.path.basename(path).replace(".pngraph", "")
-        self.status_bar.showMessage(f"已加载工具「{name}」，在运行面板中填参执行")
+        self.status_bar.showMessage(f"已加载工具「{name}」，可在画布中编辑，或切换到运行面板执行")
 
     def _on_tool_open_in_editor(self, path: str) -> None:
         """从运行面板点击「在编辑器中打开」— 加载到画布编辑。"""
