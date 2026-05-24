@@ -1,26 +1,30 @@
 from __future__ import annotations
 """
-代码编辑器窗口 — 双击节点时弹出的 Python 代码编辑对话框。
+代码编辑器窗口 — 非模态，双击节点时弹出 Python 代码编辑对话框。
+支持保存/取消，保存时发射 node_saved 信号（不阻塞监听器）。
 """
 
 
 from typing import Optional
 
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt
+from PySide2.QtCore import Qt, Signal
 
 from MayaNodeToolEditor.core.node import Node
 from MayaNodeToolEditor.core.types import DataType, SocketDirection
 
 
 class CodeEditorDialog(QtWidgets.QDialog):
-    """节点代码编辑器对话框。"""
+    """节点代码编辑器对话框（非模态）。"""
+
+    node_saved = Signal(str)  # 发射 node_id
 
     def __init__(self, node: Node, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self.node = node
         self.setWindowTitle(f"编辑节点: {node.name}")
         self.setMinimumSize(700, 500)
+        self.setAttribute(Qt.WA_DeleteOnClose, False)  # 关闭时不会销毁，可重新打开
         self.setStyleSheet("""
             QDialog { background: #2D2D30; color: #CCC; }
             QLabel { color: #CCC; }
@@ -74,19 +78,36 @@ class CodeEditorDialog(QtWidgets.QDialog):
         btn_layout.addStretch()
         cancel_btn = QtWidgets.QPushButton("取消")
         cancel_btn.setObjectName("btn_cancel")
-        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.clicked.connect(self.close)
         save_btn = QtWidgets.QPushButton("保存")
         save_btn.clicked.connect(self._save)
         btn_layout.addWidget(cancel_btn)
         btn_layout.addWidget(save_btn)
         layout.addLayout(btn_layout)
 
+        # 窗口关闭时发射保存信号（如果用户通过 ✕ 关闭则不保存）
+        self._saved = False
+
     def _save(self) -> None:
+        """保存节点属性并发射信号。"""
         self.node.name = self.name_edit.text()
         self.node.code = self.code_edit.toPlainText()
         self.node.inputs = self.input_widget.get_sockets()
         self.node.outputs = self.output_widget.get_sockets()
-        self.accept()
+        self._saved = True
+        self.node_saved.emit(self.node.node_id)
+        self.close()
+
+    def closeEvent(self, event: QtCore.QEvent) -> None:
+        """关闭时清理。"""
+        self._saved = False
+        super().closeEvent(event)
+
+    def show_and_focus(self) -> None:
+        """显示窗口并激活。"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
 
 class SocketRowWidget(QtWidgets.QWidget):

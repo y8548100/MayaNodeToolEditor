@@ -13,6 +13,7 @@ from PySide2.QtGui import QPainter
 
 from MayaNodeToolEditor.core.node import Node as NodeModel, Connection as ConnectionModel
 from MayaNodeToolEditor.core.node_graph import NodeGraph
+from MayaNodeToolEditor.core.types import DataType
 from MayaNodeToolEditor.ui.node_widget import (
     NodeWidget, SocketItem, GroupBox,
     NODE_WIDTH, SOCKET_H, NODE_HEADER_H, SOCKET_RADIUS,
@@ -132,11 +133,29 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
 
         return widget
 
+    def ensure_start_node(self) -> NodeWidget:
+        """确保画布上有一个起始节点，没有则创建。"""
+        for nid, w in self.widget_map.items():
+            if w.node.is_start_node:
+                return w
+        # 创建起始节点
+        start = NodeModel("▶ 起点", category="系统")
+        start.is_start_node = True
+        start.color = "#2E7D32"
+        start.code = "# 起始节点 — 执行从此开始"
+        start.add_output("run", DataType.ANY, "执行入口")
+        start.pos_x = -300
+        start.pos_y = -150
+        return self.add_node_widget(start)
+
     def _on_widget_changed(self, node_id: str, widget_name: str) -> None:
         """转发内嵌控件变化信号。"""
         self.inline_widget_changed.emit(node_id, widget_name)
 
     def remove_node_widget(self, node_id: str) -> None:
+        widget = self.widget_map.get(node_id)
+        if widget and widget.node.is_start_node:
+            return  # 起始节点不可删除
         widget = self.widget_map.pop(node_id, None)
         if widget:
             # 断开信号连接
@@ -530,7 +549,7 @@ class SearchBarWidget(QtWidgets.QWidget):
 
 
 class NodeEditorView(QtWidgets.QGraphicsView):
-    """节点编辑器视图（带滚轮缩放、右键平移）。"""
+    """节点编辑器视图（带滚轮缩放、右键平移、框选）。"""
 
     def __init__(self, scene: NodeEditorScene,
                  parent: Optional[QtWidgets.QWidget] = None) -> None:
@@ -540,6 +559,11 @@ class NodeEditorView(QtWidgets.QGraphicsView):
         self._last_mouse_pos = QPointF()
         self._is_connecting = False
         self._drag_socket: Optional[SocketItem] = None
+
+        # 框选状态 (Fix 3)
+        self._is_rubber_band = False
+        self._rubber_band_origin = QPointF()
+        self._rubber_band: Optional[QtWidgets.QRubberBand] = None
 
         self.setRenderHint(QPainter.Antialiasing)
         self.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -579,6 +603,21 @@ class NodeEditorView(QtWidgets.QGraphicsView):
                 event.accept()
                 return
 
+        # 左键点击空白处 → 框选 (Fix 3)
+        if event.button() == Qt.LeftButton:
+            item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
+            if item is None or isinstance(item, ConnectionLine):
+                # 空白处或连线上左键按下 → 开始框选
+                self._is_rubber_band = True
+                self._rubber_band_origin = event.pos()
+                self._rubber_band = QtWidgets.QRubberBand(
+                    QtWidgets.QRubberBand.Rectangle, self)
+                self._rubber_band.setGeometry(
+                    QtCore.QRect(event.pos(), QtCore.QSize()))
+                self._rubber_band.show()
+                event.accept()
+                return
+
         # 右键菜单
         if event.button() == Qt.RightButton:
             item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
@@ -615,6 +654,13 @@ class NodeEditorView(QtWidgets.QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QtWidgets.QMouseEvent) -> None:
+        # 框选拖拽 (Fix 3)
+        if self._is_rubber_band and self._rubber_band:
+            rect = QtCore.QRect(self._rubber_band_origin, event.pos()).normalized()
+            self._rubber_band.setGeometry(rect)
+            event.accept()
+            return
+
         if self._is_panning:
             delta = event.pos() - self._last_mouse_pos
             self._last_mouse_pos = event.pos()
@@ -642,6 +688,21 @@ class NodeEditorView(QtWidgets.QGraphicsView):
                     line.update_position()
 
     def mouseReleaseEvent(self, event: QtWidgets.QMouseEvent) -> None:
+        # 框选结束 (Fix 3)
+        if self._is_rubber_band and self._rubber_band:
+            self._is_rubber_band = False
+            self._rubber_band.hide()
+            self._rubber_band.deleteLater()
+            self._rubber_band = None
+            # 选中框内所有节点
+            rect = QtCore.QRect(self._rubber_band_origin, event.pos()).normalized()
+            scene_rect = self.mapToScene(rect).boundingRect()
+            for item in self.editor_scene.items(scene_rect):
+                if isinstance(item, NodeWidget):
+                    item.setSelected(True)
+            event.accept()
+            return
+
         if event.button() == Qt.MiddleButton:
             self._is_panning = False
             self.setCursor(Qt.ArrowCursor)
@@ -686,6 +747,28 @@ class NodeEditorView(QtWidgets.QGraphicsView):
         copy_action = menu.addAction("📋 复制")
         copy_action.triggered.connect(
             lambda: self._copy_node_to_clipboard(widget))
+
+        menu.addSeparator()
+
+        # 设为/取消起始节点
+        if widget.node.is_start_node:
+            start_action = menu.addAction("🔴 取消起始节点")
+            start_action.triggered.connect(
+                lambda: self._toggle_start_node(widget, False))
+        else:
+            start_action = menu.addAction("🟢 设为起始节点")
+            start_action.triggered.connect(
+                lambda: self._toggle_start_node(widget, True))
+
+        menu.addSeparator()
+
+        # ▶ 从此运行（仅执行该节点及其下游，不保存标记）
+        run_here_action = menu.addAction("▶ 从此运行")
+        run_here_action.triggered.connect(
+            lambda: self.editor_scene.node_run_requested.emit(
+                widget.node.node_id))
+
+        menu.addSeparator()
 
         delete_action = menu.addAction("🗑️ 删除")
         delete_action.triggered.connect(
@@ -760,6 +843,11 @@ class NodeEditorView(QtWidgets.QGraphicsView):
                 clipboard.setText(text)
             except Exception:
                 pass
+
+    def _toggle_start_node(self, widget: NodeWidget, set_start: bool) -> None:
+        """切换节点的起始标记。"""
+        widget.node.is_start_node = set_start
+        widget.update()  # 刷新绿色徽章
 
     def _paste_from_clipboard(self) -> None:
         """从剪贴板粘贴节点。"""

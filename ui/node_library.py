@@ -867,26 +867,21 @@ NODE_UI_LIST_SELECTOR = {
 # 构建节点库
 # 分类目录->节点列表
 BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
-    "内嵌控件": [
+    "内嵌控件（自带控件）": [
         NODE_INLINE_TEXT_INPUT,
         NODE_INLINE_NUMBER_INPUT,
         NODE_INLINE_SLIDER,
         NODE_INLINE_COMBO,
         NODE_INLINE_CHECKBOX,
-        NODE_INLINE_COLOR_PICKER,   # Phase 5 新增
-        NODE_INLINE_FILE_BROWSER,    # Phase 5 新增
-        NODE_INLINE_MULTILINE_TEXT,  # Phase 5 新增
-    ],
-    "工具": [
+        NODE_INLINE_COLOR_PICKER,
+        NODE_INLINE_FILE_BROWSER,
+        NODE_INLINE_MULTILINE_TEXT,
         NODE_PRINT_WITH_DISPLAY,
-        NODE_INPUT,
     ],
-    "交互": [
+    "弹窗交互": [
         NODE_UI_PROMPT_TEXT,
         NODE_UI_PROMPT_NUMBER,
         NODE_UI_CONFIRM,
-    ],
-    "UI弹窗": [
         NODE_UI_POPUP,
         NODE_UI_CONFIRM_FORM,
         NODE_UI_INPUT_FORM,
@@ -895,7 +890,7 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
         NODE_UI_COLOR_PICKER,
         NODE_UI_LIST_SELECTOR,
     ],
-    "选择获取": [
+    "Maya选择/获取": [
         NODE_GET_SELECTED,
         NODE_SELECT_BY_TYPE,
         NODE_GET_TRANSFORMS,

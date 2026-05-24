@@ -50,6 +50,9 @@ class Node:
         # 内嵌控件的运行时值（持久化用）
         self.inline_widget_values: Dict[str, Any] = {}
 
+        # 是否为主启动节点 — 执行时只跑该节点及其下游
+        self.is_start_node: bool = False
+
     def add_input(self, name: str, data_type: DataType = DataType.ANY,
                   default: Any = None, desc: str = "") -> SocketDef:
         sock = SocketDef(name, data_type, SocketDirection.INPUT, default, desc)
@@ -77,6 +80,7 @@ class Node:
             "pos_y": self.pos_y,
             "inline_widgets": self.inline_widgets,
             "inline_widget_values": self.inline_widget_values,
+            "is_start_node": self.is_start_node,
         }
         if self.is_compound and self.sub_graph:
             data["sub_graph"] = self.sub_graph
@@ -98,6 +102,7 @@ class Node:
         node.pos_y = data.get("pos_y", 0.0)
         node.inline_widgets = data.get("inline_widgets", [])
         node.inline_widget_values = data.get("inline_widget_values", {})
+        node.is_start_node = data.get("is_start_node", False)
 
         for s_data in data.get("inputs", []):
             node.inputs.append(SocketDef.from_dict(s_data))

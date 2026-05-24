@@ -644,6 +644,24 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         painter.drawRoundedRect(header_rect, CORNER_RADIUS, CORNER_RADIUS)
         painter.setClipping(False)
 
+        # 起始节点绿色徽章
+        if self.node.is_start_node:
+            badge_rect = QRectF(header_rect.x() + header_rect.width() - 44,
+                                header_rect.y() + 4, 40, header_rect.height() - 8)
+            painter.setBrush(QtGui.QColor("#4CAF50"))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(badge_rect, 4, 4)
+            painter.setPen(QtGui.QColor("#FFF"))
+            pf = painter.font()
+            pf.setPointSize(7)
+            pf.setBold(True)
+            painter.setFont(pf)
+            painter.drawText(badge_rect, Qt.AlignCenter, "START")
+            # 恢复字号
+            pf2 = painter.font()
+            pf2.setPointSize(9)
+            painter.setFont(pf2)
+
         # 标题文字
         painter.setPen(QtGui.QColor("#EEE"))
         font = painter.font()

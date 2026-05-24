@@ -50,6 +50,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._undo_timer.setInterval(100)
         self._undo_timer.timeout.connect(self._update_undo_menu_text)
 
+        # 全局快捷键确保任何焦点下都能用
+        self._undo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Z"), self)
+        self._undo_shortcut.activated.connect(self._undo)
+        self._redo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Shift+Z"), self)
+        self._redo_shortcut.activated.connect(self._redo)
+        self._copy_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+C"), self)
+        self._copy_shortcut.activated.connect(self._copy_selected)
+        self._paste_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+V"), self)
+        self._paste_shortcut.activated.connect(self._paste_from_clipboard)
+
     def _setup_style(self) -> None:
         self.setStyleSheet("""
             QMainWindow { background: #2D2D30; }
@@ -463,13 +473,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status_bar.showMessage(f"已添加节点 {node.name}")
 
     def _on_node_double_click(self, node_id: str) -> None:
+        """双击节点打开代码编辑器（非模态，不阻塞监听器）。"""
         node = self.scene.graph.get_node(node_id)
         if node is None:
             return
+
+        # 如果已有该节点的编辑器窗口，激活它
+        if hasattr(self, '_code_dialogs') and node_id in self._code_dialogs:
+            dialog = self._code_dialogs[node_id]
+            if dialog.isVisible():
+                dialog.show_and_focus()
+                return
+
         dialog = CodeEditorDialog(node, self)
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            self._refresh_node_widget(node_id)
-            self.status_bar.showMessage(f"已更新节点 {node.name}")
+        dialog.node_saved.connect(lambda nid: self._on_code_saved(nid))
+        if not hasattr(self, '_code_dialogs'):
+            self._code_dialogs = {}
+        self._code_dialogs[node_id] = dialog
+        dialog.show_and_focus()
+
+    def _on_code_saved(self, node_id: str) -> None:
+        """代码编辑器保存后的回调。"""
+        self._refresh_node_widget(node_id)
+        node = self.scene.graph.get_node(node_id)
+        name = node.name if node else "?"
+        self.status_bar.showMessage(f"已更新节点 {name}")
 
     def _refresh_node_widget(self, node_id: str) -> None:
         widget = self.scene.widget_map.get(node_id)
@@ -496,9 +524,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene.graph = NodeGraph()
         self.scene.widget_map.clear()
         self.scene.connection_lines.clear()
+        self.scene.group_boxes.clear()
         self.scene.clear()
+        # 创建起始节点
+        self.scene.ensure_start_node()
         self._current_file = None
-        self.status_bar.showMessage("新建节点图")
+        self.status_bar.showMessage("新建节点图（含起始节点）")
 
     def _save_graph(self) -> None:
         # Phase 2: 先持久化控件值再保存
@@ -536,6 +567,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.scene.add_node_widget(node)
             for conn in graph.connections.values():
                 self.scene.add_connection_line(conn)
+            # 加载后确保有起始节点（如果图上没有的话）
+            self.scene.ensure_start_node()
             # Phase 2: 加载后恢复内嵌控件值
             self.scene.restore_inline_values()
             self._current_file = path
@@ -640,61 +673,83 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_node_run_requested(self, node_id: str) -> None:
         """
-        直接运行单个 UI 节点（不跑全图）。
-        收集该节点的输入（连线来源 + 默认值 + 内嵌控件值）后执行。
+        从指定节点开始执行（仅运行该节点及其下游）。
+        用在：
+        - UI 节点 ▶ 按钮
+        - 右键 "▶ 从此运行"
+        - F5 如果有起始节点则走这里
         """
         node = self.scene.graph.get_node(node_id)
         if node is None:
             return
 
-        inputs = {}
-        for sock in node.inputs:
-            connected = [
-                c for c in self.scene.graph.connections.values()
-                if c.target_node_id == node_id
-                and c.target_socket == sock.name
-            ]
-            if connected:
-                inputs[sock.name] = sock.default_value
-            else:
-                inputs[sock.name] = sock.default_value
+        # 收集内嵌控件值
+        inline_values = self.scene.collect_all_inline_values()
 
-        # 合并内嵌控件值
-        widget = self.scene.widget_map.get(node_id)
-        if widget:
-            inline = widget.get_all_inline_values()
-            inputs.update(inline)
-
+        # 用 executor 跑子树
         try:
             executor = Executor(self.scene.graph)
-            result = executor.execute_ui_node(node_id, inputs)
 
-            # 更新内嵌显示控件
-            if widget and result:
-                node = self.scene.graph.get_node(node_id)
-                if node:
-                    for cfg in node.inline_widgets:
-                        if cfg.get("type") == "text_display":
-                            name = cfg.get("name", "output")
-                            if name in result:
-                                widget.set_inline_value(name, str(result[name]))
-                            else:
-                                for k, v in result.items():
-                                    widget.set_inline_value(name, str(v))
-                                    break
+            # 查找下游节点
+            downstream = self.scene.get_downstream_nodes(node_id)
+            all_nodes = [node_id] + downstream
 
-            self.status_bar.showMessage(f"▶ 已运行 UI 节点: {node.name}")
+            # 按拓扑顺序执行
+            topo = self.scene.graph.topological_sort()
+            ordered = [nid for nid in topo if nid in all_nodes]
 
-            if result:
-                result_str = ", ".join(f"{k}={v}" for k, v in result.items())
-                print(f"[NodeEditor] ▶ {node.name} → {result_str}")
+            for nid in ordered:
+                n = self.scene.graph.get_node(nid)
+                if n is None:
+                    continue
+
+                inputs = {}
+                for sock in n.inputs:
+                    connected = [
+                        c for c in self.scene.graph.connections.values()
+                        if c.target_node_id == nid
+                        and c.target_socket == sock.name
+                    ]
+                    if connected:
+                        conn = connected[0]
+                        upstream_out = executor.results.get(
+                            conn.source_node_id, {}).get(conn.source_socket)
+                        inputs[sock.name] = upstream_out if upstream_out is not None else sock.default_value
+                    else:
+                        inputs[sock.name] = sock.default_value
+
+                # 合并内嵌控件值
+                inline_vals = inline_values.get(nid, {})
+                for k, v in inline_vals.items():
+                    if k not in inputs or inputs[k] is None:
+                        inputs[k] = v
+
+                # 执行
+                if n.exec_mode == "ui":
+                    result = executor._run_ui_node(n, inputs)
+                else:
+                    result = executor._run_node(n, inputs)
+                executor.results[nid] = result or {}
+
+            # 更新显示控件
+            self._update_inline_displays(executor.results)
+
+            # 状态栏
+            node_names = [self.scene.graph.get_node(nid).name
+                          for nid in ordered if self.scene.graph.get_node(nid)]
+            self.status_bar.showMessage(
+                f"▶ 已运行: {' → '.join(node_names[:3])}"
+                + (f" +{len(node_names)-3}" if len(node_names) > 3 else ""))
+
+            # 如果有起始节点标记，自动清除非起始节点的印记
+            # (不需要，起始节点标记是持久化的)
 
         except Exception as e:
             import traceback
             traceback.print_exc()
             QtWidgets.QMessageBox.warning(
                 self, "运行失败",
-                f"节点 [{node.name}] 执行出错:\n{e}")
+                f"执行出错:\n{e}")
 
     def _export_script(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -721,6 +776,7 @@ def launch() -> QtWidgets.QMainWindow:
 
     window = MainWindow()
     window.show()
+    window.scene.ensure_start_node()
 
     # 防 GC：存在 __main__ 模块
     import __main__

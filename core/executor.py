@@ -27,15 +27,41 @@ class Executor:
 
     def execute(self, inline_values: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
-        执行整个节点图。
+        执行节点图。
         inline_values: {node_id: {widget_name: value}} — 内嵌控件的值
         返回 {node_id: {socket: value}} 或抛出异常。
+
+        执行策略：
+        - 如果有标记为 is_start_node 的节点，只执行该节点及其下游
+        - 如果没有起始节点，执行所有节点（向后兼容）
         """
         self.results = {}
         self.errors = {}
         self._inline_values = inline_values or {}
 
-        order = self.graph.topological_sort()
+        # 查找起始节点
+        start_nodes = [nid for nid, n in self.graph.nodes.items()
+                       if n.is_start_node]
+
+        if start_nodes:
+            # BFS 从起始节点向下游找可达节点
+            reachable: set = set()
+            queue = list(start_nodes)
+            while queue:
+                nid = queue.pop(0)
+                if nid in reachable:
+                    continue
+                reachable.add(nid)
+                for conn in self.graph.connections.values():
+                    if conn.source_node_id == nid and conn.target_node_id not in reachable:
+                        queue.append(conn.target_node_id)
+
+            # 只执行可达节点
+            all_order = self.graph.topological_sort()
+            order = [nid for nid in all_order if nid in reachable]
+        else:
+            # 没有起始节点 → 全量执行
+            order = self.graph.topological_sort()
 
         for node_id in order:
             node = self.graph.get_node(node_id)
@@ -45,10 +71,11 @@ class Executor:
             # 收集输入
             inputs = self._resolve_inputs(node)
 
-            # 合并内嵌控件值
+            # 合并内嵌控件值（连线值优先，内嵌值只填未连线的输入）
             inline_vals = self._resolve_inline_values(node)
             for k, v in inline_vals.items():
-                inputs[k] = v
+                if k not in inputs or inputs[k] is None:
+                    inputs[k] = v
 
             # 执行节点代码
             try:
