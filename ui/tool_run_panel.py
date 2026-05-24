@@ -515,3 +515,38 @@ class ToolRunPanel(QtWidgets.QWidget):
         """通知外部在编辑器中打开工具。"""
         if self._tool_path:
             self.open_in_editor.emit(self._tool_path)
+
+
+# ====== 快捷入口 ======
+
+def run_tool_panel(tool_name_or_path: str) -> None:
+    """
+    快捷启动函数：直接打开指定工具的运行面板。
+    可在 Maya 脚本编辑器中直接调用：
+      from MayaNodeToolEditor.ui.tool_run_panel import run_tool_panel
+      run_tool_panel("改名工具")
+    """
+    import os
+    from MayaNodeToolEditor.ui.saved_tools_panel import TOOLS_DIR
+    from MayaNodeToolEditor.main import launch
+
+    # 解析路径
+    if os.path.exists(tool_name_or_path):
+        path = tool_name_or_path
+    else:
+        # 按工具名查找
+        path = os.path.join(TOOLS_DIR, f"{tool_name_or_path}.pngraph")
+        if not os.path.exists(path):
+            # 尝试不加扩展名
+            for f in os.listdir(TOOLS_DIR):
+                if f.endswith(".pngraph") and tool_name_or_path in f:
+                    path = os.path.join(TOOLS_DIR, f)
+                    break
+            else:
+                print(f"未找到工具: {tool_name_or_path}")
+                return
+
+    win = launch()
+    win.run_panel.set_tool(path)
+    win.sidebar.setCurrentIndex(2)
+    print(f"已打开工具面板: {os.path.basename(path).replace('.pngraph', '')}")
