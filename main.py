@@ -26,10 +26,12 @@ from MayaNodeToolEditor.export.export_script import compile_to_script
 class MainWindow(QtWidgets.QMainWindow):
     """主窗口 — 组装节点库 + 工具收藏 + 画布。"""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
         self.setWindowTitle("Maya 代码节点工具 v0.3")
         self.setMinimumSize(1200, 700)
+        # Tool 标记使窗口保持在父窗口（玛雅）上层，不丢失焦点
+        self.setWindowFlags(self.windowFlags() | Qt.Tool)
         self._setup_style()
         self._setup_ui()
         self._setup_menu()
@@ -812,8 +814,20 @@ def launch() -> QtWidgets.QMainWindow:
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
 
-    window = MainWindow()
+    # 查找玛雅主窗口作为父窗口（窗口不会跑到玛雅后面）
+    parent = None
+    try:
+        import maya.OpenMayaUI as _omu
+        ptr = _omu.MQtUtil.mainWindow()
+        if ptr:
+            from shiboken2 import wrapInstance as _wi
+            parent = _wi(int(ptr), QtWidgets.QWidget)
+    except Exception:
+        pass
+
+    window = MainWindow(parent)
     window.show()
+    window.raise_()  # 提到最前
     window.scene.ensure_start_node()
 
     # 防 GC：存在 __main__ 模块

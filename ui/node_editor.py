@@ -548,6 +548,24 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
                     self.addItem(line)
                     self.connection_lines[conn.conn_id] = line
 
+        # 确保起始节点存在（undo 到空图后自动补回）
+        has_start = any(w.node.is_start_node for w in self.widget_map.values())
+        if not has_start:
+            from MayaNodeToolEditor.core.node import Node as NodeModel
+            start = NodeModel("▶ 起点", category="系统")
+            start.is_start_node = True
+            start.color = "#2E7D32"
+            start.code = "# 起始节点 — 执行从此开始"
+            start.add_output("run", DataType.ANY, "执行入口")
+            start.pos_x = -300
+            start.pos_y = -150
+            # 直接添加，不走 add_node_widget（避免触发 undo 快照）
+            self.graph.add_node(start)
+            widget = NodeWidget(start, self)
+            self.addItem(widget)
+            self.widget_map[start.node_id] = widget
+            widget._relay.widget_changed.connect(self._on_widget_changed)
+
         self.graph_changed.emit()
 
     # ========== 复制/粘贴 ==========
@@ -844,11 +862,11 @@ class NodeEditorView(QtWidgets.QGraphicsView):
             self._rubber_band.hide()
             self._rubber_band.deleteLater()
             self._rubber_band = None
-            # 选中框内所有节点
+            # 选中框内所有节点和连线
             rect = QtCore.QRect(self._rubber_band_origin, event.pos()).normalized()
             scene_rect = self.mapToScene(rect).boundingRect()
             for item in self.editor_scene.items(scene_rect):
-                if isinstance(item, NodeWidget):
+                if isinstance(item, (NodeWidget, ConnectionLine)):
                     item.setSelected(True)
             event.accept()
             return
