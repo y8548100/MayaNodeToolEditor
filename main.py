@@ -27,11 +27,10 @@ class MainWindow(QtWidgets.QMainWindow):
     """主窗口 — 组装节点库 + 工具收藏 + 画布。"""
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
-        super().__init__(parent)
+        # Window|Tool：工具窗口，保持在父窗口（玛雅）上层
+        super().__init__(parent, Qt.Window | Qt.Tool)
         self.setWindowTitle("Maya 代码节点工具 v0.3")
         self.setMinimumSize(1200, 700)
-        # Tool 标记使窗口保持在父窗口（玛雅）上层，不丢失焦点
-        self.setWindowFlags(self.windowFlags() | Qt.Tool)
         self._setup_style()
         self._setup_ui()
         self._setup_menu()
@@ -828,7 +827,15 @@ def launch() -> QtWidgets.QMainWindow:
     window = MainWindow(parent)
     window.show()
     window.raise_()  # 提到最前
+    window.activateWindow()
     window.scene.ensure_start_node()
+
+    # 如果没有找到玛雅父窗口，用定时器周期性提窗防遮挡
+    if parent is None:
+        from PySide2.QtCore import QTimer
+        _raise_timer = QTimer(window)
+        _raise_timer.timeout.connect(lambda: (window.raise_(), window.activateWindow()))
+        _raise_timer.start(2000)  # 每 2 秒提一次
 
     # 防 GC：存在 __main__ 模块
     import __main__

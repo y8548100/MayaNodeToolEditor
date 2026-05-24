@@ -40,6 +40,19 @@ class ConnectionLine(QtWidgets.QGraphicsPathItem):
         self._hovered = False
         self._update_path()
 
+    def boundingRect(self) -> QRectF:
+        """扩大选中区域，方便框选和点击。"""
+        return super().boundingRect().adjusted(-6, -6, 6, 6)
+
+    def shape(self) -> QtGui.QPainterPath:
+        """覆盖默认 shape 让鼠标点击路径本身就能选中。"""
+        path = QtGui.QPainterPath()
+        if self.path().isEmpty():
+            return path
+        stroker = QtGui.QPainterPathStroker()
+        stroker.setWidth(12)  # 12px 宽的热区
+        return stroker.createStroke(self.path())
+
     def _update_path(self) -> None:
         p1 = self.source_socket.center_pos()
         p2 = self.target_socket.center_pos()
@@ -774,8 +787,8 @@ class NodeEditorView(QtWidgets.QGraphicsView):
         # 左键点击空白处 → 框选 (Fix 3)
         if event.button() == Qt.LeftButton:
             item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
-            if item is None or isinstance(item, ConnectionLine):
-                # 空白处或连线上左键按下 → 开始框选
+            if item is None:
+                # 空白处左键按下 → 开始框选
                 self._is_rubber_band = True
                 self._rubber_band_origin = event.pos()
                 self._rubber_band = QtWidgets.QRubberBand(
