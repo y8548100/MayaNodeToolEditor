@@ -709,7 +709,13 @@ class MainWindow(QtWidgets.QMainWindow):
             inline_values = self._collect_inline_values()
 
             executor = Executor(self.scene.graph)
+            # 执行状态可视化回调
+            from PySide2 import QtWidgets
+            def _on_exec_node(nid):
+                self.scene.set_executing_node(nid)
+            executor.on_node_executing = _on_exec_node
             results = executor.execute(inline_values=inline_values)
+            self.scene.reset_execution_status()
 
             # 更新内嵌显示控件
             self._update_inline_displays(results)
@@ -730,6 +736,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except ValueError as e:
             self.status_bar.showMessage(f"❌ 图结构错误: {e}", 8000)
         except RuntimeError as e:
+            self.scene.reset_execution_status()
             msg = str(e).split("\n")[0][:80]
             self.status_bar.showMessage(f"❌ 执行失败: {msg}", 8000)
 
@@ -751,6 +758,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # 用 executor 跑子树
         try:
             executor = Executor(self.scene.graph)
+            from PySide2 import QtWidgets
+            def _on_exec_node(nid):
+                self.scene.set_executing_node(nid)
+            executor.on_node_executing = _on_exec_node
 
             # 查找下游节点
             downstream = self.scene.get_downstream_nodes(node_id)
@@ -794,6 +805,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     result = executor._run_node(n, inputs)
                 executor.results[nid] = result or {}
+
+            self.scene.reset_execution_status()
 
             # 更新显示控件
             self._update_inline_displays(executor.results)

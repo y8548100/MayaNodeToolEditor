@@ -27,8 +27,8 @@ NODE_GET_SELECTED = {
     except ImportError:
         return {"selected": ["mock_object_1", "mock_object_2"]}
 ''',
-    "inputs": [],
-    "outputs": [{"name": "selected", "type": "list", "desc": "选中对象列表"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行（连接起点）", "label": "触发"}],
+    "outputs": [{"name": "selected", "type": "list", "desc": "选中对象列表", "label": "选中项"}],
 }
 
 # 按类型选择
@@ -44,8 +44,8 @@ NODE_SELECT_BY_TYPE = {
     except ImportError:
         return {"objects": [f"mock_{node_type}_1", f"mock_{node_type}_2"]}
 ''',
-    "inputs": [{"name": "node_type", "type": "string", "default": "joint", "desc": "Maya 节点类型"}],
-    "outputs": [{"name": "objects", "type": "list", "desc": "匹配的对象列表"}],
+    "inputs": [{"name": "node_type", "type": "string", "default": "joint", "desc": "Maya 节点类型", "label": "节点类型"}],
+    "outputs": [{"name": "objects", "type": "list", "desc": "匹配的对象列表", "label": "对象列表"}],
 }
 
 # 获取变换节点
@@ -61,8 +61,8 @@ NODE_GET_TRANSFORMS = {
     except ImportError:
         return {"transforms": [o for o in objects if "transform" in o.lower()]}
 ''',
-    "inputs": [{"name": "objects", "type": "list", "default": [], "desc": "对象列表"}],
-    "outputs": [{"name": "transforms", "type": "list", "desc": "变换节点列表"}],
+    "inputs": [{"name": "objects", "type": "list", "default": [], "desc": "对象列表", "label": "对象列表"}],
+    "outputs": [{"name": "transforms", "type": "list", "desc": "变换节点列表", "label": "变换节点"}],
 }
 
 # 获取子对象
@@ -82,10 +82,10 @@ NODE_GET_CHILDREN = {
         return {"children": [f"{parent}_child_1", f"{parent}_child_2"]}
 ''',
     "inputs": [
-        {"name": "parent", "type": "string", "default": "", "desc": "父对象名称"},
-        {"name": "child_type", "type": "string", "default": "transform", "desc": "子对象类型"},
+        {"name": "parent", "type": "string", "default": "", "desc": "父对象名称", "label": "父对象"},
+        {"name": "child_type", "type": "string", "default": "transform", "desc": "子对象类型", "label": "子对象类型"},
     ],
-    "outputs": [{"name": "children", "type": "list", "desc": "子对象列表"}],
+    "outputs": [{"name": "children", "type": "list", "desc": "子对象列表", "label": "子对象"}],
 }
 
 # 获取BlendShape目标
@@ -105,8 +105,8 @@ NODE_GET_BLENDSHAPES = {
     except ImportError:
         return {"targets": ["target_A", "target_B", "target_C"]}
 ''',
-    "inputs": [{"name": "blendshape", "type": "string", "default": "", "desc": "BlendShape 节点名称"}],
-    "outputs": [{"name": "targets", "type": "list", "desc": "变形目标列表"}],
+    "inputs": [{"name": "blendshape", "type": "string", "default": "", "desc": "BlendShape 节点名称", "label": "混合变形"}],
+    "outputs": [{"name": "targets", "type": "list", "desc": "变形目标列表", "label": "targets"}],
 }
 
 # 获取所有BlendShape
@@ -127,8 +127,8 @@ NODE_GET_SELECTED_BLENDSHAPES = {
     except ImportError:
         return {"blendshapes": {"blendShape1": ["A", "B", "C"]}}
 ''',
-    "inputs": [],
-    "outputs": [{"name": "blendshapes", "type": "dict", "desc": "所有BlendShape及其目标"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "blendshapes", "type": "dict", "desc": "所有BlendShape及其目标", "label": "blendshapes"}],
 }
 
 # 添加前缀
@@ -141,10 +141,10 @@ NODE_ADD_PREFIX = {
     return {"result": [prefix + n for n in names]}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "prefix", "type": "string", "default": "_", "desc": "前缀文本"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "prefix", "type": "string", "default": "_", "desc": "前缀文本", "label": "前缀"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表", "label": "结果"}],
 }
 
 # 添加后缀
@@ -157,10 +157,10 @@ NODE_ADD_SUFFIX = {
     return {"result": [n + suffix for n in names]}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "suffix", "type": "string", "default": "_suffix", "desc": "后缀文本"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "suffix", "type": "string", "default": "_suffix", "desc": "后缀文本", "label": "后缀"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表", "label": "结果"}],
 }
 
 # 替换文本
@@ -174,11 +174,11 @@ NODE_REPLACE_TEXT = {
     return {"result": [n.replace(old, new) for n in names]}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "old", "type": "string", "default": "", "desc": "要替换的文本"},
-        {"name": "new", "type": "string", "default": "", "desc": "替换为"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "old", "type": "string", "default": "", "desc": "要替换的文本", "label": "原文本"},
+        {"name": "new", "type": "string", "default": "", "desc": "替换为", "label": "新文本"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "处理后的名称列表", "label": "结果"}],
 }
 
 # 格式化编号
@@ -197,12 +197,12 @@ NODE_FORMAT_NUMBER = {
     return {"result": result}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "start", "type": "int", "default": 1, "desc": "起始编号"},
-        {"name": "digits", "type": "int", "default": 2, "desc": "编号位数"},
-        {"name": "separator", "type": "string", "default": "_", "desc": "分隔符"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "start", "type": "int", "default": 1, "desc": "起始编号", "label": "start"},
+        {"name": "digits", "type": "int", "default": 2, "desc": "编号位数", "label": "digits"},
+        {"name": "separator", "type": "string", "default": "_", "desc": "分隔符", "label": "分隔符"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "编号后的名称列表"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "编号后的名称列表", "label": "结果"}],
 }
 
 # 提取数字后缀
@@ -221,8 +221,8 @@ NODE_EXTRACT_NUMBER = {
             result.append("")
     return {"numbers": result}
 ''',
-    "inputs": [{"name": "names", "type": "list", "default": [], "desc": "名称列表"}],
-    "outputs": [{"name": "numbers", "type": "list", "desc": "提取的数字列表"}],
+    "inputs": [{"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"}],
+    "outputs": [{"name": "numbers", "type": "list", "desc": "提取的数字列表", "label": "numbers"}],
 }
 
 # 按规则改名（模板）
@@ -244,14 +244,14 @@ NODE_RENAME_RULE = {
     return {"result": result}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "rule", "type": "string", "default": "{prefix}{name}", "desc": "命名规则"},
-        {"name": "prefix", "type": "string", "default": "", "desc": "前缀"},
-        {"name": "suffix", "type": "string", "default": "", "desc": "后缀"},
-        {"name": "start", "type": "int", "default": 1, "desc": "起始编号"},
-        {"name": "digits", "type": "int", "default": 2, "desc": "编号位数"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "rule", "type": "string", "default": "{prefix}{name}", "desc": "命名规则", "label": "rule"},
+        {"name": "prefix", "type": "string", "default": "", "desc": "前缀", "label": "前缀"},
+        {"name": "suffix", "type": "string", "default": "", "desc": "后缀", "label": "后缀"},
+        {"name": "start", "type": "int", "default": 1, "desc": "起始编号", "label": "start"},
+        {"name": "digits", "type": "int", "default": 2, "desc": "编号位数", "label": "digits"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "改名后的名称列表"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "改名后的名称列表", "label": "结果"}],
 }
 
 # 执行改名
@@ -288,15 +288,15 @@ NODE_EXECUTE_RENAME = {
         return {"renamed": new_names, "count": len(new_names), "errors": [], "error_count": 0}
 ''',
     "inputs": [
-        {"name": "old_names", "type": "list", "default": [], "desc": "旧名称列表"},
-        {"name": "new_names", "type": "list", "default": [], "desc": "新名称列表"},
-        {"name": "dry_run", "type": "bool", "default": False, "desc": "仅预览不执行"},
+        {"name": "old_names", "type": "list", "default": [], "desc": "旧名称列表", "label": "old_names"},
+        {"name": "new_names", "type": "list", "default": [], "desc": "新名称列表", "label": "新名称列表"},
+        {"name": "dry_run", "type": "bool", "default": False, "desc": "仅预览不执行", "label": "dry_run"},
     ],
     "outputs": [
-        {"name": "renamed", "type": "list", "desc": "改名后的名称"},
-        {"name": "count", "type": "int", "desc": "成功改名数"},
-        {"name": "errors", "type": "list", "desc": "错误信息"},
-        {"name": "error_count", "type": "int", "desc": "错误数"},
+        {"name": "renamed", "type": "list", "desc": "改名后的名称", "label": "renamed"},
+        {"name": "count", "type": "int", "desc": "成功改名数", "label": "数量"},
+        {"name": "errors", "type": "list", "desc": "错误信息", "label": "errors"},
+        {"name": "error_count", "type": "int", "desc": "错误数", "label": "error_count"},
     ],
 }
 
@@ -314,10 +314,10 @@ NODE_VALIDATE_NAMES = {
     except ImportError:
         return {"conflicts": [], "safe": new_names}
 ''',
-    "inputs": [{"name": "new_names", "type": "list", "default": [], "desc": "新名称列表"}],
+    "inputs": [{"name": "new_names", "type": "list", "default": [], "desc": "新名称列表", "label": "新名称列表"}],
     "outputs": [
-        {"name": "conflicts", "type": "list", "desc": "冲突的名称"},
-        {"name": "safe", "type": "list", "desc": "安全的名称"},
+        {"name": "conflicts", "type": "list", "desc": "冲突的名称", "label": "冲突名称"},
+        {"name": "safe", "type": "list", "desc": "安全的名称", "label": "安全名称"},
     ],
 }
 
@@ -345,10 +345,10 @@ NODE_RENAME_HIERARCHY = {
         return {"result": objects}
 ''',
     "inputs": [
-        {"name": "objects", "type": "list", "default": [], "desc": "对象列表"},
-        {"name": "separator", "type": "string", "default": "_", "desc": "层级分隔符"},
+        {"name": "objects", "type": "list", "default": [], "desc": "对象列表", "label": "对象列表"},
+        {"name": "separator", "type": "string", "default": "_", "desc": "层级分隔符", "label": "分隔符"},
     ],
-    "outputs": [{"name": "result", "type": "list", "desc": "带层级路径的名称"}],
+    "outputs": [{"name": "result", "type": "list", "desc": "带层级路径的名称", "label": "结果"}],
 }
 
 # 遍历列表
@@ -359,10 +359,10 @@ NODE_ITERATE = {
     items = inputs.get("items", [])
     return {"output": items, "count": len(items)}
 ''',
-    "inputs": [{"name": "items", "type": "list", "default": [], "desc": "要遍历的列表"}],
+    "inputs": [{"name": "items", "type": "list", "default": [], "desc": "要遍历的列表", "label": "列表项"}],
     "outputs": [
-        {"name": "output", "type": "list", "desc": "输出列表"},
-        {"name": "count", "type": "int", "desc": "数量"},
+        {"name": "output", "type": "list", "desc": "输出列表", "label": "输出"},
+        {"name": "count", "type": "int", "desc": "数量", "label": "数量"},
     ],
 }
 
@@ -375,10 +375,10 @@ NODE_FILTER = {
     result = [i for i in items if str(i).strip()]
     return {"filtered": result, "removed": len(items) - len(result)}
 ''',
-    "inputs": [{"name": "items", "type": "list", "default": [], "desc": "输入列表"}],
+    "inputs": [{"name": "items", "type": "list", "default": [], "desc": "输入列表", "label": "列表项"}],
     "outputs": [
-        {"name": "filtered", "type": "list", "desc": "过滤后的列表"},
-        {"name": "removed", "type": "int", "desc": "移除数量"},
+        {"name": "filtered", "type": "list", "desc": "过滤后的列表", "label": "过滤结果"},
+        {"name": "removed", "type": "int", "desc": "移除数量", "label": "移除数"},
     ],
 }
 
@@ -402,13 +402,13 @@ NODE_REGEX_FILTER = {
         return {"filtered": names, "removed": 0, "error": str(e)}
 ''',
     "inputs": [
-        {"name": "names", "type": "list", "default": [], "desc": "名称列表"},
-        {"name": "pattern", "type": "string", "default": ".*", "desc": "正则表达式"},
-        {"name": "include", "type": "bool", "default": True, "desc": "True=匹配保留"},
+        {"name": "names", "type": "list", "default": [], "desc": "名称列表", "label": "名称列表"},
+        {"name": "pattern", "type": "string", "default": ".*", "desc": "正则表达式", "label": "匹配规则"},
+        {"name": "include", "type": "bool", "default": True, "desc": "True=匹配保留", "label": "包含模式"},
     ],
     "outputs": [
-        {"name": "filtered", "type": "list", "desc": "过滤后的名称"},
-        {"name": "removed", "type": "int", "desc": "移除数量"},
+        {"name": "filtered", "type": "list", "desc": "过滤后的名称", "label": "过滤结果"},
+        {"name": "removed", "type": "int", "desc": "移除数量", "label": "移除数"},
     ],
 }
 
@@ -422,10 +422,10 @@ NODE_ADD = {
     return {"sum": a + b}
 ''',
     "inputs": [
-        {"name": "a", "type": "float", "default": 0, "desc": "数值A"},
-        {"name": "b", "type": "float", "default": 0, "desc": "数值B"},
+        {"name": "a", "type": "float", "default": 0, "desc": "数值A", "label": "数值A"},
+        {"name": "b", "type": "float", "default": 0, "desc": "数值B", "label": "数值B"},
     ],
-    "outputs": [{"name": "sum", "type": "float", "desc": "和"}],
+    "outputs": [{"name": "sum", "type": "float", "desc": "和", "label": "求和结果"}],
 }
 
 # 合并列表
@@ -438,10 +438,10 @@ NODE_MERGE = {
     return {"merged": a + b}
 ''',
     "inputs": [
-        {"name": "list_a", "type": "list", "default": [], "desc": "列表A"},
-        {"name": "list_b", "type": "list", "default": [], "desc": "列表B"},
+        {"name": "list_a", "type": "list", "default": [], "desc": "列表A", "label": "列表A"},
+        {"name": "list_b", "type": "list", "default": [], "desc": "列表B", "label": "列表B"},
     ],
-    "outputs": [{"name": "merged", "type": "list", "desc": "合并结果"}],
+    "outputs": [{"name": "merged", "type": "list", "desc": "合并结果", "label": "合并结果"}],
 }
 
 # 打印信息
@@ -456,8 +456,11 @@ NODE_PRINT = {
     print(f"[NodeEditor] {msg}")
     return {"output": msg}
 ''',
-    "inputs": [{"name": "message", "type": "string", "default": "Hello", "desc": "要打印的消息"}],
-    "outputs": [{"name": "output", "type": "string", "desc": "消息内容"}],
+    "inputs": [
+        {"name": "trigger", "type": "trigger", "label": "触发", "desc": "触发执行"},
+        {"name": "message", "type": "string", "default": "Hello", "desc": "要打印的消息", "label": "消息文本"}
+    ],
+    "outputs": [{"name": "output", "type": "string", "desc": "消息内容", "label": "输出"}],
 }
 
 # 输入文本
@@ -471,8 +474,11 @@ NODE_INPUT = {
     text = inputs.get("text", "")
     return {"text": text}
 ''',
-    "inputs": [{"name": "text", "type": "string", "default": "", "desc": "文本内容"}],
-    "outputs": [{"name": "text", "type": "string", "desc": "文本内容"}],
+    "inputs": [
+        {"name": "trigger", "type": "trigger", "label": "触发", "desc": "触发执行"},
+        {"name": "text", "type": "string", "default": "", "desc": "文本内容", "label": "文本内容"}
+    ],
+    "outputs": [{"name": "text", "type": "string", "desc": "文本内容", "label": "文本内容"}],
 }
 
 # ====== 交互节点（运行时弹窗让用户输入） ======
@@ -499,11 +505,11 @@ NODE_UI_PROMPT_TEXT = {
         return {"value": default}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "输入文本", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "请输入", "desc": "提示信息"},
-        {"name": "default", "type": "string", "default": "", "desc": "默认值"},
+        {"name": "title", "type": "string", "default": "输入文本", "desc": "对话框标题", "label": "标题"},
+        {"name": "message", "type": "string", "default": "请输入", "desc": "提示信息", "label": "消息文本"},
+        {"name": "default", "type": "string", "default": "", "desc": "默认值", "label": "默认值"},
     ],
-    "outputs": [{"name": "value", "type": "string", "desc": "用户输入的值"}],
+    "outputs": [{"name": "value", "type": "string", "desc": "用户输入的值", "label": "数值"}],
 }
 
 NODE_UI_PROMPT_NUMBER = {
@@ -531,11 +537,11 @@ NODE_UI_PROMPT_NUMBER = {
         return {"value": float(default)}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "输入数值", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "请输入数值", "desc": "提示信息"},
-        {"name": "default", "type": "float", "default": 0, "desc": "默认值"},
+        {"name": "title", "type": "string", "default": "输入数值", "desc": "对话框标题", "label": "标题"},
+        {"name": "message", "type": "string", "default": "请输入数值", "desc": "提示信息", "label": "消息文本"},
+        {"name": "default", "type": "float", "default": 0, "desc": "默认值", "label": "默认值"},
     ],
-    "outputs": [{"name": "value", "type": "float", "desc": "用户输入的数值"}],
+    "outputs": [{"name": "value", "type": "float", "desc": "用户输入的数值", "label": "数值"}],
 }
 
 NODE_UI_CONFIRM = {
@@ -557,12 +563,12 @@ NODE_UI_CONFIRM = {
         return {"confirmed": True, "text": "yes"}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "确定继续？", "desc": "提示信息"},
+        {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题", "label": "标题"},
+        {"name": "message", "type": "string", "default": "确定继续？", "desc": "提示信息", "label": "消息文本"},
     ],
     "outputs": [
-        {"name": "confirmed", "type": "bool", "desc": "用户是否确认"},
-        {"name": "text", "type": "string", "desc": "yes/no"},
+        {"name": "confirmed", "type": "bool", "desc": "用户是否确认", "label": "确认结果"},
+        {"name": "text", "type": "string", "desc": "yes/no", "label": "文本内容"},
     ],
 }
 
@@ -578,8 +584,8 @@ NODE_INLINE_TEXT_INPUT = {
     "inline_widgets": [
         {"type": "line_edit", "name": "text", "label": "文本", "default": ""},
     ],
-    "inputs": [],
-    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本", "label": "文本内容"}],
 }
 
 NODE_INLINE_NUMBER_INPUT = {
@@ -592,8 +598,8 @@ NODE_INLINE_NUMBER_INPUT = {
     "inline_widgets": [
         {"type": "spin_box", "name": "value", "label": "数值", "default": 0, "min": -9999, "max": 9999},
     ],
-    "inputs": [],
-    "outputs": [{"name": "value", "type": "int", "desc": "输入的数值"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "value", "type": "int", "desc": "输入的数值", "label": "数值"}],
 }
 
 NODE_INLINE_SLIDER = {
@@ -606,8 +612,8 @@ NODE_INLINE_SLIDER = {
     "inline_widgets": [
         {"type": "slider", "name": "value", "label": "滑块", "default": 50, "min": 0, "max": 100},
     ],
-    "inputs": [],
-    "outputs": [{"name": "value", "type": "int", "desc": "滑块值 0-100"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "value", "type": "int", "desc": "滑块值 0-100", "label": "数值"}],
 }
 
 NODE_INLINE_COMBO = {
@@ -621,8 +627,8 @@ NODE_INLINE_COMBO = {
         {"type": "combo", "name": "selected", "label": "选项", "default": "A",
          "options": ["A", "B", "C", "D"]},
     ],
-    "inputs": [],
-    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项", "label": "选中项"}],
 }
 
 NODE_INLINE_CHECKBOX = {
@@ -635,8 +641,8 @@ NODE_INLINE_CHECKBOX = {
     "inline_widgets": [
         {"type": "check_box", "name": "enabled", "label": "启用", "default": True},
     ],
-    "inputs": [],
-    "outputs": [{"name": "enabled", "type": "bool", "desc": "是否启用"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "enabled", "type": "bool", "desc": "是否启用", "label": "启用"}],
 }
 
 # 打印节点——带内嵌输出显示
@@ -651,10 +657,13 @@ NODE_PRINT_WITH_DISPLAY = {
     "inline_widgets": [
         {"type": "text_display", "name": "display", "label": "输出", "default": ""},
     ],
-    "inputs": [{"name": "message", "type": "string", "default": "Hello", "desc": "要打印的消息"}],
+    "inputs": [
+        {"name": "trigger", "type": "trigger", "label": "触发", "desc": "触发执行"},
+        {"name": "message", "type": "string", "default": "Hello", "desc": "要打印的消息", "label": "消息文本"}
+    ],
     "outputs": [
-        {"name": "display", "type": "string", "desc": "显示内容"},
-        {"name": "output", "type": "string", "desc": "消息内容"},
+        {"name": "display", "type": "string", "desc": "显示内容", "label": "display"},
+        {"name": "output", "type": "string", "desc": "消息内容", "label": "输出"},
     ],
 }
 
@@ -670,8 +679,8 @@ NODE_INLINE_COLOR_PICKER = {
     "inline_widgets": [
         {"type": "color_picker", "name": "color", "label": "颜色", "default": "#4FC1FF"},
     ],
-    "inputs": [],
-    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex", "label": "颜色"}],
 }
 
 NODE_INLINE_FILE_BROWSER = {
@@ -684,8 +693,8 @@ NODE_INLINE_FILE_BROWSER = {
     "inline_widgets": [
         {"type": "file_browser", "name": "path", "label": "路径", "default": ""},
     ],
-    "inputs": [],
-    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径", "label": "文件路径"}],
 }
 
 NODE_INLINE_MULTILINE_TEXT = {
@@ -698,8 +707,8 @@ NODE_INLINE_MULTILINE_TEXT = {
     "inline_widgets": [
         {"type": "plain_text", "name": "text", "label": "内容", "default": ""},
     ],
-    "inputs": [],
-    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本"}],
+    "inputs": [{"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"}],
+    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本", "label": "文本内容"}],
 }
 
 # ====== 原 UI 弹窗节点（保持兼容） ======
@@ -717,11 +726,11 @@ NODE_UI_POPUP = {
     return {"result": result}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "提示", "desc": "窗口标题"},
-        {"name": "message", "type": "string", "default": "你好！", "desc": "显示消息"},
-        {"name": "buttons", "type": "string", "default": "确定", "desc": "按钮（逗号分隔）"},
+        {"name": "title", "type": "string", "default": "提示", "desc": "窗口标题", "label": "标题"},
+        {"name": "message", "type": "string", "default": "你好！", "desc": "显示消息", "label": "消息文本"},
+        {"name": "buttons", "type": "string", "default": "确定", "desc": "按钮（逗号分隔）", "label": "按钮"},
     ],
-    "outputs": [{"name": "result", "type": "string", "desc": "按下的按钮名称"}],
+    "outputs": [{"name": "result", "type": "string", "desc": "按下的按钮名称", "label": "结果"}],
 }
 
 NODE_UI_CONFIRM_FORM = {
@@ -738,14 +747,14 @@ NODE_UI_CONFIRM_FORM = {
     return {"confirmed": confirmed, "text": "yes" if confirmed else "no"}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题"},
-        {"name": "message", "type": "string", "default": "确定继续吗？", "desc": "提示信息"},
-        {"name": "confirm_text", "type": "string", "default": "确定", "desc": "确认按钮文字"},
-        {"name": "cancel_text", "type": "string", "default": "取消", "desc": "取消按钮文字"},
+        {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题", "label": "标题"},
+        {"name": "message", "type": "string", "default": "确定继续吗？", "desc": "提示信息", "label": "消息文本"},
+        {"name": "confirm_text", "type": "string", "default": "确定", "desc": "确认按钮文字", "label": "确认按钮"},
+        {"name": "cancel_text", "type": "string", "default": "取消", "desc": "取消按钮文字", "label": "取消按钮"},
     ],
     "outputs": [
-        {"name": "confirmed", "type": "bool", "desc": "用户是否确认"},
-        {"name": "text", "type": "string", "desc": "yes/no"},
+        {"name": "confirmed", "type": "bool", "desc": "用户是否确认", "label": "确认结果"},
+        {"name": "text", "type": "string", "desc": "yes/no", "label": "文本内容"},
     ],
 }
 
@@ -766,15 +775,15 @@ NODE_UI_INPUT_FORM = {
     return result or {}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "表单输入", "desc": "窗口标题"},
-        {"name": "name", "type": "string", "default": "", "desc": "默认名称"},
-        {"name": "count", "type": "int", "default": 1, "desc": "默认数量"},
-        {"name": "enabled", "type": "bool", "default": True, "desc": "默认启用"},
+        {"name": "title", "type": "string", "default": "表单输入", "desc": "窗口标题", "label": "标题"},
+        {"name": "name", "type": "string", "default": "", "desc": "默认名称", "label": "name"},
+        {"name": "count", "type": "int", "default": 1, "desc": "默认数量", "label": "数量"},
+        {"name": "enabled", "type": "bool", "default": True, "desc": "默认启用", "label": "启用"},
     ],
     "outputs": [
-        {"name": "name", "type": "string", "desc": "用户输入的名称"},
-        {"name": "count", "type": "int", "desc": "用户输入的数量"},
-        {"name": "enabled", "type": "bool", "desc": "用户是否勾选"},
+        {"name": "name", "type": "string", "desc": "用户输入的名称", "label": "name"},
+        {"name": "count", "type": "int", "desc": "用户输入的数量", "label": "数量"},
+        {"name": "enabled", "type": "bool", "desc": "用户是否勾选", "label": "启用"},
     ],
 }
 
@@ -796,13 +805,13 @@ NODE_UI_SLIDER = {
     return result
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "滑块输入", "desc": "窗口标题"},
+        {"name": "title", "type": "string", "default": "滑块输入", "desc": "窗口标题", "label": "标题"},
         {"name": "label", "type": "string", "default": "数值", "desc": "滑块标签"},
-        {"name": "default", "type": "int", "default": 50, "desc": "默认值"},
-        {"name": "min", "type": "int", "default": 0, "desc": "最小值"},
-        {"name": "max", "type": "int", "default": 100, "desc": "最大值"},
+        {"name": "default", "type": "int", "default": 50, "desc": "默认值", "label": "默认值"},
+        {"name": "min", "type": "int", "default": 0, "desc": "最小值", "label": "最小值"},
+        {"name": "max", "type": "int", "default": 100, "desc": "最大值", "label": "最大值"},
     ],
-    "outputs": [{"name": "value", "type": "int", "desc": "滑块值"}],
+    "outputs": [{"name": "value", "type": "int", "desc": "滑块值", "label": "数值"}],
 }
 
 NODE_UI_FILE_PICKER = {
@@ -819,12 +828,12 @@ NODE_UI_FILE_PICKER = {
     return {"path": path}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "选择文件", "desc": "对话框标题"},
-        {"name": "file_filter", "type": "string", "default": "所有文件(*.*)", "desc": "文件过滤"},
-        {"name": "start_dir", "type": "string", "default": "", "desc": "起始目录"},
-        {"name": "mode", "type": "string", "default": "open", "desc": "模式: open/save/directory"},
+        {"name": "title", "type": "string", "default": "选择文件", "desc": "对话框标题", "label": "标题"},
+        {"name": "file_filter", "type": "string", "default": "所有文件(*.*)", "desc": "文件过滤", "label": "文件过滤"},
+        {"name": "start_dir", "type": "string", "default": "", "desc": "起始目录", "label": "起始目录"},
+        {"name": "mode", "type": "string", "default": "open", "desc": "模式: open/save/directory", "label": "模式"},
     ],
-    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径"}],
+    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径", "label": "文件路径"}],
 }
 
 NODE_UI_COLOR_PICKER = {
@@ -839,10 +848,10 @@ NODE_UI_COLOR_PICKER = {
     return {"color": color}
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "选择颜色", "desc": "对话框标题"},
-        {"name": "default_color", "type": "string", "default": "#FFFFFF", "desc": "默认颜色"},
+        {"name": "title", "type": "string", "default": "选择颜色", "desc": "对话框标题", "label": "标题"},
+        {"name": "default_color", "type": "string", "default": "#FFFFFF", "desc": "默认颜色", "label": "默认颜色"},
     ],
-    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex"}],
+    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex", "label": "颜色"}],
 }
 
 NODE_UI_LIST_SELECTOR = {
@@ -864,11 +873,87 @@ NODE_UI_LIST_SELECTOR = {
     return result
 ''',
     "inputs": [
-        {"name": "title", "type": "string", "default": "选择项目", "desc": "窗口标题"},
+        {"name": "title", "type": "string", "default": "选择项目", "desc": "窗口标题", "label": "标题"},
         {"name": "items", "type": "list", "default": ["选项A", "选项B", "选项C"], "desc": "选项列表"},
     ],
-    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项目"}],
+    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项目", "label": "选中项"}],
 }
+
+
+# ====== 条件路由节点 ======
+
+NODE_CONDITIONAL_BRANCH = {
+    "name": "条件路由",
+    "code": '''def run(inputs):
+    """条件路由：根据condition选择输出路径。"""
+    data = inputs.get("data", None)
+    condition = inputs.get("condition", True)
+    if condition:
+        return {"true_out": data, "false_out": None}
+    else:
+        return {"true_out": None, "false_out": data}
+''',
+    "color": "#E65100",
+    "inputs": [
+        {"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"},
+        {"name": "data", "type": "any", "default": None, "desc": "输入数据", "label": "数据"},
+        {"name": "condition", "type": "bool", "default": True, "desc": "条件", "label": "条件"},
+    ],
+    "outputs": [
+        {"name": "true_out", "type": "any", "desc": "条件为True时输出", "label": "True输出"},
+        {"name": "false_out", "type": "any", "desc": "条件为False时输出", "label": "False输出"},
+    ],
+}
+
+
+# ====== 多模式批量改名节点 ======
+
+NODE_RENAME_MULTI = {
+    "name": "批量改名（多模式）",
+    "code": '''def run(inputs):
+    """多模式改名：根据mode选择执行不同改名操作。"""
+    objects = inputs.get("objects", [])
+    mode = inputs.get("mode", "prefix")
+    result = []
+    for obj in objects:
+        if mode == "prefix":
+            prefix = inputs.get("prefix", "")
+            result.append(prefix + obj)
+        elif mode == "suffix":
+            suffix = inputs.get("suffix", "")
+            result.append(obj + suffix)
+        elif mode == "replace":
+            old = str(inputs.get("old", ""))
+            new = str(inputs.get("new", ""))
+            result.append(obj.replace(old, new))
+        elif mode == "number":
+            start = int(inputs.get("start_num", 1))
+            pad = int(inputs.get("pad_width", 3))
+            count = objects.index(obj)
+            num = str(start + count).zfill(pad)
+            result.append(f"{obj}_{num}")
+        else:
+            result.append(obj)
+    return {"result": result, "count": len(result)}
+''',
+    "color": "#1565C0",
+    "inputs": [
+        {"name": "trigger", "type": "any", "default": None, "desc": "触发执行", "label": "触发"},
+        {"name": "objects", "type": "list", "default": [], "desc": "对象列表", "label": "对象列表"},
+        {"name": "mode", "type": "string", "default": "prefix", "desc": "模式: prefix/suffix/replace/number", "label": "改名模式"},
+        {"name": "prefix", "type": "string", "default": "new_", "desc": "前缀", "label": "前缀", "visible_when": "mode == 'prefix'"},
+        {"name": "suffix", "type": "string", "default": "_new", "desc": "后缀", "label": "后缀", "visible_when": "mode == 'suffix'"},
+        {"name": "old", "type": "string", "default": "", "desc": "原文本", "label": "搜索文本", "visible_when": "mode == 'replace'"},
+        {"name": "new", "type": "string", "default": "", "desc": "新文本", "label": "替换文本", "visible_when": "mode == 'replace'"},
+        {"name": "start_num", "type": "int", "default": 1, "desc": "起始编号", "label": "起始编号", "visible_when": "mode == 'number'"},
+        {"name": "pad_width", "type": "int", "default": 3, "desc": "编号位数", "label": "编号位数", "visible_when": "mode == 'number'"},
+    ],
+    "outputs": [
+        {"name": "result", "type": "list", "desc": "改名结果", "label": "改名结果"},
+        {"name": "count", "type": "int", "desc": "数量", "label": "数量"},
+    ],
+}
+
 
 # 构建节点库
 # 分类目录->节点列表
@@ -921,6 +1006,12 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
         NODE_ITERATE,
         NODE_FILTER,
         NODE_REGEX_FILTER,
+    ],
+    "逻辑控制": [
+        NODE_CONDITIONAL_BRANCH,
+    ],
+    "一站式改名": [
+        NODE_RENAME_MULTI,
     ],
     "计算": [
         NODE_ADD,

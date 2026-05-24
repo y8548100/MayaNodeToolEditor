@@ -54,14 +54,15 @@ class Node:
         self.is_start_node: bool = False
 
     def add_input(self, name: str, data_type: DataType = DataType.ANY,
-                  default: Any = None, desc: str = "") -> SocketDef:
-        sock = SocketDef(name, data_type, SocketDirection.INPUT, default, desc)
+                  default: Any = None, desc: str = "", label: str = "",
+                  visible_when: str = "") -> SocketDef:
+        sock = SocketDef(name, data_type, SocketDirection.INPUT, default, desc, label=label, visible_when=visible_when)
         self.inputs.append(sock)
         return sock
 
     def add_output(self, name: str, data_type: DataType = DataType.ANY,
-                   description: str = "") -> SocketDef:
-        sock = SocketDef(name, data_type, SocketDirection.OUTPUT, description=description)
+                   description: str = "", label: str = "") -> SocketDef:
+        sock = SocketDef(name, data_type, SocketDirection.OUTPUT, description=description, label=label)
         self.outputs.append(sock)
         return sock
 

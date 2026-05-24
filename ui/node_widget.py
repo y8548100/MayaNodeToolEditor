@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 """
 节点UI组件 — PySide2 QGraphicsItem + QGraphicsProxyWidget 实现的视觉节点。
 支持内嵌控件（输入框、滑块、打印输出等）直接显示在节点上。
@@ -244,6 +244,7 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         # 选中状态
         self._hovered = False
         self._is_moving = False
+        self._execution_status = "idle"
 
         self.setPos(node.pos_x, node.pos_y)
 
@@ -337,7 +338,7 @@ class NodeWidget(QtWidgets.QGraphicsItem):
                 combo.setCurrentText(str(default))
             combo.setStyleSheet(_INLINE_COMBO_STYLE)
             combo.currentTextChanged.connect(
-                lambda text, nid=node_id, wn=name: self._emit_change(nid, wn))
+                lambda text, nid=node_id, wn=name: (self._emit_change(nid, wn), self.refresh_port_visibility() if any(s.visible_when for s in self.node.inputs) else None))
             return combo
 
         elif wtype == "check_box":
@@ -476,6 +477,9 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         """根据插口数 + 内嵌控件数计算节点高度。"""
         sock_area = NODE_HEADER_H + max(
             len(self.input_sockets), len(self.output_sockets), 1) * SOCKET_H
+        # 如果可见输入少于总输入，增加最小高度
+        visible_in = sum(1 for s in self.node.inputs if getattr(s, "_visible", True))
+        sock_area = NODE_HEADER_H + max(visible_in, len(self.output_sockets), 1) * SOCKET_H
         inline_area = 0
         for cfg in self.node.inline_widgets:
             wtype = cfg.get("type", "line_edit")
@@ -644,6 +648,20 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         painter.drawRoundedRect(header_rect, CORNER_RADIUS, CORNER_RADIUS)
         painter.setClipping(False)
 
+        # 执行状态高亮边框
+        if self._execution_status == "running":
+            painter.setPen(QtGui.QPen(QtGui.QColor("#4FC1FF"), 3))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), CORNER_RADIUS+2, CORNER_RADIUS+2)
+        elif self._execution_status == "success":
+            painter.setPen(QtGui.QPen(QtGui.QColor("#4CAF50"), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), CORNER_RADIUS+2, CORNER_RADIUS+2)
+        elif self._execution_status == "error":
+            painter.setPen(QtGui.QPen(QtGui.QColor("#F44336"), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), CORNER_RADIUS+2, CORNER_RADIUS+2)
+
         # 起始节点绿色徽章
         if self.node.is_start_node:
             badge_rect = QRectF(header_rect.x() + header_rect.width() - 44,
@@ -656,7 +674,7 @@ class NodeWidget(QtWidgets.QGraphicsItem):
             pf.setPointSize(7)
             pf.setBold(True)
             painter.setFont(pf)
-            painter.drawText(badge_rect, Qt.AlignCenter, "START")
+            painter.drawText(badge_rect, Qt.AlignCenter, "起点")
             # 恢复字号
             pf2 = painter.font()
             pf2.setPointSize(9)
@@ -681,14 +699,14 @@ class NodeWidget(QtWidgets.QGraphicsItem):
             y = NODE_HEADER_H + i * SOCKET_H + SOCKET_H // 2
             painter.drawText(QRectF(8, y - 8, NODE_WIDTH - 20, 16),
                              Qt.AlignRight | Qt.AlignVCenter,
-                             sock.name)
+                             sock.label)
 
         # 输入插口标签（左对齐）
         for i, sock in enumerate(self.node.inputs):
             y = NODE_HEADER_H + i * SOCKET_H + SOCKET_H // 2
             painter.drawText(QRectF(12, y - 8, NODE_WIDTH - 24, 16),
                              Qt.AlignLeft | Qt.AlignVCenter,
-                             sock.name)
+                             sock.label)
 
         # 内嵌控件标签（在代理上方绘制）
         for i, cfg in enumerate(self.node.inline_widgets):
@@ -712,12 +730,66 @@ class NodeWidget(QtWidgets.QGraphicsItem):
 
     def mouseReleaseEvent(self, event: QtWidgets.QGraphicsSceneMouseEvent) -> None:
         self._is_moving = False
+        self._execution_status = "idle"
         self.setCursor(Qt.OpenHandCursor)
         self.node.pos_x = self.pos().x()
         self.node.pos_y = self.pos().y()
         # 持久化：移动后保存位置
         self.scene_ref._schedule_persist_if_needed()
         super().mouseReleaseEvent(event)
+
+    def set_execution_status(self, status: str) -> None:
+        """设置执行状态: idle/running/success/error"""
+        self._execution_status = status
+        self.update()
+
+    def refresh_port_visibility(self) -> None:
+        """根据visible_when条件重新计算输入端口可见性。"""
+        # 收集内嵌控件当前值作为上下文
+        context = {}
+        for name, widget in self._inline_controls.items():
+            try:
+                if isinstance(widget, QtWidgets.QComboBox):
+                    context[name] = widget.currentText()
+                elif isinstance(widget, QtWidgets.QCheckBox):
+                    context[name] = widget.isChecked()
+                elif isinstance(widget, QtWidgets.QLineEdit):
+                    context[name] = widget.text()
+                elif hasattr(widget, 'value'):
+                    context[name] = widget.value()
+                else:
+                    context[name] = ""
+            except:
+                context[name] = ""
+        
+        for sock in self.node.inputs:
+            visible = True
+            if sock.visible_when:
+                try:
+                    mode = context.get("mode", "")
+                    visible = eval(sock.visible_when, {"__builtins__": {}}, context)
+                except:
+                    visible = True
+            sock._visible = visible
+        
+        # 重新安排插口位置
+        self._rebuild_socket_items()
+        self._recalc_height()
+        self.update()
+
+    def _rebuild_socket_items(self) -> None:
+        """根据可见性显示/隐藏插口（不重建，避免野指针）。"""
+        vis_idx = 0
+        for i, sock in enumerate(self.node.inputs):
+            visible = getattr(sock, '_visible', True)
+            if i < len(self.input_sockets):
+                self.input_sockets[i].setVisible(visible)
+                if visible:
+                    self.input_sockets[i].setPos(0, NODE_HEADER_H + vis_idx * SOCKET_H)
+                    vis_idx += 1
+        # 输出保持全部可见
+        for item in self.output_sockets:
+            item.setVisible(True)
 
     def hoverEnterEvent(self, event: QtWidgets.QGraphicsSceneHoverEvent) -> None:
         self._hovered = True

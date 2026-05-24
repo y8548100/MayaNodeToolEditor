@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-"""
-类型系统 — 节点输入/输出数据类型声明。
-"""
-
+"""类型系统 — 节点输入/输出数据类型声明。"""
 
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -17,11 +14,10 @@ class DataType(Enum):
     BOOL = "bool"
     LIST = "list"
     DICT = "dict"
-    OBJECT = "object"  # Maya 对象（DagPath 或字符串名称）
-    ANY = "any"         # 任意类型，不做检查
+    OBJECT = "object"
+    ANY = "any"
 
 
-# 类型默认值映射
 TYPE_DEFAULTS: Dict[DataType, Any] = {
     DataType.STRING: "",
     DataType.INT: 0,
@@ -35,13 +31,12 @@ TYPE_DEFAULTS: Dict[DataType, Any] = {
 
 
 class SocketDirection(Enum):
-    """插口方向。"""
     INPUT = "input"
     OUTPUT = "output"
 
 
 class SocketDef:
-    """插口定义 — 描述一个节点上的输入或输出。"""
+    """插口定义"""
 
     def __init__(
         self,
@@ -50,6 +45,8 @@ class SocketDef:
         direction: SocketDirection = SocketDirection.INPUT,
         default_value: Any = None,
         description: str = "",
+        label: str = "",
+        visible_when: str = "",
     ) -> None:
         self.name = name
         self.data_type = data_type
@@ -59,6 +56,8 @@ class SocketDef:
             else TYPE_DEFAULTS.get(data_type)
         )
         self.description = description
+        self.label = label or name
+        self.visible_when = visible_when
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -67,23 +66,26 @@ class SocketDef:
             "direction": self.direction.value,
             "default_value": self.default_value,
             "description": self.description,
+            "label": self.label,
+            "visible_when": self.visible_when,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> SocketDef:
+    def from_dict(cls, data: Dict[str, Any]) -> "SocketDef":
         return cls(
             name=data["name"],
             data_type=DataType(data.get("data_type", "any")),
             direction=SocketDirection(data.get("direction", "input")),
             default_value=data.get("default_value"),
             description=data.get("description", ""),
+            label=data.get("label", ""),
+            visible_when=data.get("visible_when", ""),
         )
 
     def __repr__(self) -> str:
         return f"<{self.direction.value}:{self.name}({self.data_type.value})>"
 
 
-# 标准颜色映射（用于UI）
 TYPE_COLORS: Dict[DataType, str] = {
     DataType.STRING: "#4CAF50",
     DataType.INT: "#2196F3",

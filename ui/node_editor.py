@@ -133,6 +133,9 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         self.setSceneRect(-2000, -2000, 4000, 4000)
         self.setBackgroundBrush(QtGui.QColor("#1E1E1E"))
 
+        # 执行状态追踪
+        self._executing_node_id: Optional[str] = None
+
         # 撤销/重做管理器引用（由 MainWindow 设置）
         self.undo_manager = None
         self._undo_prev_state = None
@@ -183,12 +186,15 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
                     data_type=DataType(inp.get("type", "any")),
                     default=inp.get("default"),
                     desc=inp.get("desc", ""),
+                    label=inp.get("label", ""),
+                    visible_when=inp.get("visible_when", ""),
                 )
             for out in template.get("outputs", []):
                 node.add_output(
                     name=out.get("name", "output"),
                     data_type=DataType(out.get("type", "any")),
                     description=out.get("desc", ""),
+                    label=out.get("label", ""),
                 )
 
             # 放在鼠标释放位置
@@ -226,7 +232,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         start.is_start_node = True
         start.color = "#2E7D32"
         start.code = "# 起始节点 — 执行从此开始"
-        start.add_output("run", DataType.ANY, "执行入口")
+        start.add_output("run", DataType.ANY, "执行入口", label="执行信号")
         start.pos_x = -300
         start.pos_y = -150
         return self.add_node_widget(start)
@@ -646,6 +652,25 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         self.graph_changed.emit()
         return new_ids
 
+    # ========== 执行状态追踪 ==========
+
+    def set_executing_node(self, node_id: Optional[str]) -> None:
+        """设置当前执行中的节点, None=清除"""
+        self._executing_node_id = node_id
+        for nid, widget in self.widget_map.items():
+            if nid == node_id:
+                widget.set_execution_status("running")
+            elif getattr(widget, "_execution_status", "idle") != "idle":
+                widget.set_execution_status("idle")
+        if self.views():
+            self.views()[0].viewport().update()
+
+    def reset_execution_status(self) -> None:
+        """清除所有节点的执行状态"""
+        self._executing_node_id = None
+        for widget in self.widget_map.values():
+            widget.set_execution_status("idle")
+
     # ========== 事件处理 ==========
 
     def _schedule_persist_if_needed(self) -> None:
@@ -941,18 +966,6 @@ class NodeEditorView(QtWidgets.QGraphicsView):
 
         menu.addSeparator()
 
-        # 设为/取消起始节点
-        if widget.node.is_start_node:
-            start_action = menu.addAction("🔴 取消起始节点")
-            start_action.triggered.connect(
-                lambda: self._toggle_start_node(widget, False))
-        else:
-            start_action = menu.addAction("🟢 设为起始节点")
-            start_action.triggered.connect(
-                lambda: self._toggle_start_node(widget, True))
-
-        menu.addSeparator()
-
         # ▶ 从此运行（仅执行该节点及其下游，不保存标记）
         run_here_action = menu.addAction("▶ 从此运行")
         run_here_action.triggered.connect(
@@ -1034,11 +1047,6 @@ class NodeEditorView(QtWidgets.QGraphicsView):
                 clipboard.setText(text)
             except Exception:
                 pass
-
-    def _toggle_start_node(self, widget: NodeWidget, set_start: bool) -> None:
-        """切换节点的起始标记。"""
-        widget.node.is_start_node = set_start
-        widget.update()  # 刷新绿色徽章
 
     def _paste_from_clipboard(self) -> None:
         """从剪贴板粘贴节点。"""

@@ -24,6 +24,7 @@ class Executor:
         self.results: Dict[str, Dict[str, Any]] = {}  # node_id → {socket: value}
         self.errors: Dict[str, str] = {}
         self._inline_values: Dict[str, Dict[str, Any]] = {}
+        self.on_node_executing = None  # 回调: func(node_id)
 
     def execute(self, inline_values: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
@@ -78,6 +79,10 @@ class Executor:
                     inputs[k] = v
                 elif isinstance(inputs[k], str) and inputs[k] == "" and v:
                     inputs[k] = v  # 空字符串 < 内嵌控件的实际值
+
+            # 报告当前执行节点
+            if self.on_node_executing:
+                self.on_node_executing(node_id)
 
             # 执行节点代码
             try:
