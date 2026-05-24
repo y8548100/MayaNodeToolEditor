@@ -923,6 +923,21 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
 }
 
 
+class DragTreeWidget(QtWidgets.QTreeWidget):
+    """可拖出节点模板 MIME 数据的树形控件。"""
+
+    def mimeData(self, items: List[QtWidgets.QTreeWidgetItem]) -> QtCore.QMimeData:
+        """重写：将节点的 JSON 模板数据注入 MIME。"""
+        import json as _json
+        mime = QtCore.QMimeData()
+        if items:
+            data = items[0].data(0, Qt.UserRole)
+            if data:
+                raw = _json.dumps(data, ensure_ascii=False).encode("utf-8")
+                mime.setData("application/x-node-template", raw)
+        return mime
+
+
 class NodeLibraryWidget(QtWidgets.QWidget):
     """节点库侧栏 — 分类浏览预设节点，拖放添加。"""
 
@@ -956,7 +971,7 @@ class NodeLibraryWidget(QtWidgets.QWidget):
         self.search_box.textChanged.connect(self._filter_nodes)
         layout.addWidget(self.search_box)
 
-        self.tree = QtWidgets.QTreeWidget()
+        self.tree = DragTreeWidget()  # 支持拖拽 MIME 数据的树
         self.tree.setHeaderHidden(True)
         self.tree.setDragEnabled(True)
         self.tree.setDragDropMode(QtWidgets.QAbstractItemView.DragOnly)
@@ -982,11 +997,6 @@ class NodeLibraryWidget(QtWidgets.QWidget):
                     continue
                 node_item = QtWidgets.QTreeWidgetItem([f"    {name}"])
                 node_item.setData(0, Qt.UserRole, node_data)
-                # 拖放数据
-                mime_data = QtCore.QMimeData()
-                import json
-                mime_data.setData("application/x-node-template",
-                                  json.dumps(node_data, ensure_ascii=False).encode())
                 node_item.setFlags(node_item.flags() | Qt.ItemIsDragEnabled)
                 cat_item.addChild(node_item)
 

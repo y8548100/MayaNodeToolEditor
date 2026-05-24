@@ -250,7 +250,19 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
 
         src_socket = self._find_socket(src_widget, conn.source_socket, is_output=True)
         tgt_socket = self._find_socket(tgt_widget, conn.target_socket, is_output=False)
+
+        # 起始节点特殊处理：即使目标没有匹配插口也创建连接（标记为执行树成员）
+        src_is_start = src_widget.node.is_start_node if src_widget else False
+        if src_socket and not tgt_socket and src_is_start:
+            # 创建虚拟连接，visual 层面跳过插口匹配
+            pass  # 仍走下面的 add_connection
+
         if not src_socket or not tgt_socket:
+            if src_is_start:
+                # 起始节点允许无插口匹配的连接（用于标记执行树）
+                self.graph.add_connection(conn)
+                self.graph_changed.emit()
+                return
             return
 
         self.graph.add_connection(conn)
