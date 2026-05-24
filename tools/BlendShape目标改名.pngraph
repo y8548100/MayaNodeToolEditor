@@ -1,0 +1,178 @@
+{
+  "name": "BlendShape目标改名",
+  "description": "给BlendShape变形目标统一加后缀",
+  "nodes": [
+    {
+      "node_id": "d8e9cf8bd3f1",
+      "name": "获取所有BlendShape",
+      "category": "选择获取",
+      "code": "def run(inputs):\n    try:\n        import maya.cmds as cmds\n        all_bs = cmds.ls(type=\"blendShape\") or []\n        r = {}\n        for bs in all_bs:\n            al = cmds.aliasAttr(bs, query=True) or []\n            r[bs] = [al[i] for i in range(0, len(al), 2)] if al else []\n        return {\"blendshapes\": r}\n    except ImportError:\n        return {\"blendshapes\": {\"BS1\": [\"A\", \"B\"]}}\n",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "blendshapes",
+          "data_type": "dict",
+          "direction": "output",
+          "default_value": null,
+          "description": "所有BlendShape"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": -500,
+      "pos_y": 0
+    },
+    {
+      "node_id": "435593439657",
+      "name": "提取目标列表",
+      "category": "批量处理",
+      "code": "def run(inputs):\n    d = inputs.get(\"blendshapes\", {})\n    name = inputs.get(\"bs_name\", \"\")\n    t = d.get(name, []) if d else []\n    return {\"targets\": t, \"count\": len(t)}\n",
+      "inputs": [
+        {
+          "name": "blendshapes",
+          "data_type": "dict",
+          "direction": "input",
+          "default_value": {},
+          "description": "BlendShape字典"
+        },
+        {
+          "name": "bs_name",
+          "data_type": "string",
+          "direction": "input",
+          "default_value": "",
+          "description": "BlendShape名称"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "targets",
+          "data_type": "list",
+          "direction": "output"
+        },
+        {
+          "name": "count",
+          "data_type": "int",
+          "direction": "output"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": -200,
+      "pos_y": 0
+    },
+    {
+      "node_id": "fd619d0216f3",
+      "name": "添加后缀",
+      "category": "名字处理",
+      "code": "def run(inputs):\n    names = inputs.get(\"names\", [])\n    suffix = inputs.get(\"suffix\", \"_v2\")\n    return {\"result\": [n + suffix for n in names]}\n",
+      "inputs": [
+        {
+          "name": "names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "名称"
+        },
+        {
+          "name": "suffix",
+          "data_type": "string",
+          "direction": "input",
+          "default_value": "_v2",
+          "description": "后缀"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "data_type": "list",
+          "direction": "output"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": 0,
+      "pos_y": -80
+    },
+    {
+      "node_id": "80fd4c931c5d",
+      "name": "重命名目标",
+      "category": "Maya改名",
+      "code": "def run(inputs):\n    bs_node = inputs.get(\"blendshape\", \"\")\n    old_names = inputs.get(\"old_names\", [])\n    new_names = inputs.get(\"new_names\", [])\n    try:\n        import maya.cmds as cmds\n        if not bs_node or not cmds.objExists(bs_node):\n            return {\"renamed\": [], \"count\": 0, \"errors\": [\"BlendShape不存在\"]}\n        renamed, errors = [], []\n        for old, new in zip(old_names, new_names):\n            try:\n                cmds.aliasAttr(new, f\"{bs_node}.weight[{old_names.index(old)}]\")\n                renamed.append(new)\n            except Exception as e:\n                errors.append(f\"{old}->{new}: {e}\")\n        return {\"renamed\": renamed, \"count\": len(renamed), \"errors\": errors, \"error_count\": len(errors)}\n    except ImportError:\n        return {\"renamed\": new_names, \"count\": len(new_names), \"errors\": [], \"error_count\": 0}\n",
+      "inputs": [
+        {
+          "name": "blendshape",
+          "data_type": "string",
+          "direction": "input",
+          "default_value": "",
+          "description": "BlendShape名称"
+        },
+        {
+          "name": "old_names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "旧名称"
+        },
+        {
+          "name": "new_names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "新名称"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "renamed",
+          "data_type": "list",
+          "direction": "output"
+        },
+        {
+          "name": "count",
+          "data_type": "int",
+          "direction": "output"
+        },
+        {
+          "name": "errors",
+          "data_type": "list",
+          "direction": "output"
+        },
+        {
+          "name": "error_count",
+          "data_type": "int",
+          "direction": "output"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": 300,
+      "pos_y": 0
+    }
+  ],
+  "connections": [
+    {
+      "conn_id": "d6405241a8cf",
+      "source_node_id": "d8e9cf8bd3f1",
+      "source_socket": "blendshapes",
+      "target_node_id": "435593439657",
+      "target_socket": "blendshapes"
+    },
+    {
+      "conn_id": "4029a1d136f1",
+      "source_node_id": "435593439657",
+      "source_socket": "targets",
+      "target_node_id": "fd619d0216f3",
+      "target_socket": "names"
+    },
+    {
+      "conn_id": "1da00bc03659",
+      "source_node_id": "435593439657",
+      "source_socket": "targets",
+      "target_node_id": "80fd4c931c5d",
+      "target_socket": "old_names"
+    },
+    {
+      "conn_id": "a09523100b34",
+      "source_node_id": "fd619d0216f3",
+      "source_socket": "result",
+      "target_node_id": "80fd4c931c5d",
+      "target_socket": "new_names"
+    }
+  ]
+}

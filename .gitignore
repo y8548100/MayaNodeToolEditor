@@ -1,0 +1,11 @@
+# MayaNodeToolEditor
+
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.zip
+*.b64
+*.swp
+*.swo
+*~

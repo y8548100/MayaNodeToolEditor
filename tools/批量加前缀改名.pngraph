@@ -1,0 +1,136 @@
+{
+  "name": "批量加前缀改名",
+  "description": "给选中对象统一加前缀改名",
+  "nodes": [
+    {
+      "node_id": "27b347e23b79",
+      "name": "获取选中对象",
+      "category": "选择获取",
+      "code": "def run(inputs):\n    try:\n        import maya.cmds as cmds\n        sel = cmds.ls(selection=True) or []\n        return {\"selected\": sel}\n    except ImportError:\n        return {\"selected\": [\"mock1\", \"mock2\"]}\n",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "selected",
+          "data_type": "list",
+          "direction": "output",
+          "default_value": null,
+          "description": "选中对象列表"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": -400,
+      "pos_y": 0
+    },
+    {
+      "node_id": "f7fe8103832b",
+      "name": "添加前缀",
+      "category": "名字处理",
+      "code": "def run(inputs):\n    names = inputs.get(\"names\", [])\n    prefix = inputs.get(\"prefix\", \"_\")\n    return {\"result\": [prefix + n for n in names]}\n",
+      "inputs": [
+        {
+          "name": "names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "名称列表"
+        },
+        {
+          "name": "prefix",
+          "data_type": "string",
+          "direction": "input",
+          "default_value": "_",
+          "description": "前缀文本"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "data_type": "list",
+          "direction": "output",
+          "default_value": null,
+          "description": "处理后的名称"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": -100,
+      "pos_y": 0
+    },
+    {
+      "node_id": "838f9f0f0501",
+      "name": "执行改名",
+      "category": "Maya改名",
+      "code": "def run(inputs):\n    old_names = inputs.get(\"old_names\", [])\n    new_names = inputs.get(\"new_names\", [])\n    dry_run = inputs.get(\"dry_run\", False)\n    try:\n        import maya.cmds as cmds\n        renamed, errors = [], []\n        for old, new in zip(old_names, new_names):\n            if not cmds.objExists(old):\n                errors.append(f\"不存在: {old}\")\n                continue\n            if dry_run: renamed.append(new); continue\n            try:\n                renamed.append(cmds.rename(old, new))\n            except Exception as e:\n                errors.append(f\"{old}->{new}: {e}\")\n        return {\"renamed\": renamed, \"count\": len(renamed), \"errors\": errors, \"error_count\": len(errors)}\n    except ImportError:\n        return {\"renamed\": new_names, \"count\": len(new_names), \"errors\": [], \"error_count\": 0}\n",
+      "inputs": [
+        {
+          "name": "old_names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "旧名称"
+        },
+        {
+          "name": "new_names",
+          "data_type": "list",
+          "direction": "input",
+          "default_value": [],
+          "description": "新名称"
+        },
+        {
+          "name": "dry_run",
+          "data_type": "bool",
+          "direction": "input",
+          "default_value": false,
+          "description": "仅预览"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "renamed",
+          "data_type": "list",
+          "direction": "output"
+        },
+        {
+          "name": "count",
+          "data_type": "int",
+          "direction": "output"
+        },
+        {
+          "name": "errors",
+          "data_type": "list",
+          "direction": "output"
+        },
+        {
+          "name": "error_count",
+          "data_type": "int",
+          "direction": "output"
+        }
+      ],
+      "is_compound": false,
+      "pos_x": 200,
+      "pos_y": 0
+    }
+  ],
+  "connections": [
+    {
+      "conn_id": "05f3c05dd4f4",
+      "source_node_id": "27b347e23b79",
+      "source_socket": "selected",
+      "target_node_id": "f7fe8103832b",
+      "target_socket": "names"
+    },
+    {
+      "conn_id": "751773b9bee4",
+      "source_node_id": "f7fe8103832b",
+      "source_socket": "result",
+      "target_node_id": "838f9f0f0501",
+      "target_socket": "new_names"
+    },
+    {
+      "conn_id": "aea4116a7c2f",
+      "source_node_id": "27b347e23b79",
+      "source_socket": "selected",
+      "target_node_id": "838f9f0f0501",
+      "target_socket": "old_names"
+    }
+  ]
+}
