@@ -858,8 +858,20 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "导出失败", str(e))
 
 
+_launch_instance: Optional[QtWidgets.QMainWindow] = None
+
 def launch() -> QtWidgets.QMainWindow:
-    """启动编辑器（Maya 内调用此函数）。"""
+    """启动编辑器（Maya 内调用此函数）。复用已存在的窗口。"""
+    global _launch_instance
+    if _launch_instance is not None:
+        try:
+            _launch_instance.show()
+            _launch_instance.raise_()
+            _launch_instance.activateWindow()
+            return _launch_instance
+        except (RuntimeError, AttributeError):
+            _launch_instance = None  # 窗口已销毁，重建
+
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
@@ -891,6 +903,9 @@ def launch() -> QtWidgets.QMainWindow:
     # 防 GC：存在 __main__ 模块
     import __main__
     __main__._hermes_maya_window = window
+
+    global _launch_instance
+    _launch_instance = window
 
     return window
 
