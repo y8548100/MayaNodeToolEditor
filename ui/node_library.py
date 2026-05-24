@@ -447,8 +447,11 @@ NODE_MERGE = {
 # 打印信息
 NODE_PRINT = {
     "name": "打印信息",
+    "inline_widgets": [
+        {"type": "text_display", "name": "output", "default": "等待执行...", "label": "输出"},
+    ],
     "code": '''def run(inputs):
-    """打印信息到 Maya 脚本编辑器。"""
+    """打印信息，结果直接显示在节点上。"""
     msg = inputs.get("message", "Hello")
     print(f"[NodeEditor] {msg}")
     return {"output": msg}

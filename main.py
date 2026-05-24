@@ -51,22 +51,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._undo_timer.setInterval(100)
         self._undo_timer.timeout.connect(self._update_undo_menu_text)
 
-        # 全局快捷键确保任何焦点下都能用（ApplicationShortcut 防止 Maya 拦截）
-        self._undo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Z"), self)
-        self._undo_shortcut.setContext(Qt.ApplicationShortcut)
-        self._undo_shortcut.activated.connect(self._undo)
-        self._redo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Shift+Z"), self)
-        self._redo_shortcut.setContext(Qt.ApplicationShortcut)
-        self._redo_shortcut.activated.connect(self._redo)
-        self._redo_shortcut2 = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Y"), self)
-        self._redo_shortcut2.setContext(Qt.ApplicationShortcut)
-        self._redo_shortcut2.activated.connect(self._redo)
-        self._copy_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+C"), self)
-        self._copy_shortcut.setContext(Qt.ApplicationShortcut)
-        self._copy_shortcut.activated.connect(self._copy_selected)
-        self._paste_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+V"), self)
-        self._paste_shortcut.setContext(Qt.ApplicationShortcut)
-        self._paste_shortcut.activated.connect(self._paste_from_clipboard)
+        # 全局键盘事件过滤（eventFilter 避免 Maya 拦截快捷键）
+        QtWidgets.QApplication.instance().installEventFilter(self)
 
     def _setup_style(self) -> None:
         self.setStyleSheet("""
@@ -399,6 +385,40 @@ class MainWindow(QtWidgets.QMainWindow):
         if cmd:
             self.status_bar.showMessage(f"↪️ 重做: {cmd.description}")
             self._update_undo_menu_text()
+
+    def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        """全局键盘事件过滤 — 在 Maya 拦截前截获快捷键。"""
+        if event.type() == QtCore.QEvent.KeyPress:
+            # 如果焦点在文本输入控件上，不拦截按键（允许正常输入）
+            focus_widget = QtWidgets.QApplication.focusWidget()
+            if focus_widget and isinstance(focus_widget, (
+                    QtWidgets.QLineEdit, QtWidgets.QTextEdit,
+                    QtWidgets.QPlainTextEdit, QtWidgets.QSpinBox,
+                    QtWidgets.QDoubleSpinBox, QtWidgets.QComboBox)):
+                return super().eventFilter(obj, event)
+
+            key = event.key()
+            mod = event.modifiers()
+            ctrl = mod == Qt.ControlModifier
+            ctrl_shift = mod == (Qt.ControlModifier | Qt.ShiftModifier)
+
+            if ctrl and key == Qt.Key_Z and self.undo_manager.can_undo:
+                self._undo()
+                return True
+            if (ctrl_shift and key == Qt.Key_Z) or (ctrl and key == Qt.Key_Y):
+                if self.undo_manager.can_redo:
+                    self._redo()
+                    return True
+            if ctrl and key == Qt.Key_C:
+                self._copy_selected()
+                return True
+            if ctrl and key == Qt.Key_V:
+                self._paste_from_clipboard()
+                return True
+            if ctrl and key == Qt.Key_A:
+                self._select_all()
+                return True
+        return super().eventFilter(obj, event)
 
     # ========== Phase 3: 复制/粘贴 ==========
 
