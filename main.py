@@ -713,12 +713,15 @@ class MainWindow(QtWidgets.QMainWindow):
             from PySide2 import QtWidgets
             def _on_exec_node(nid):
                 self.scene.set_executing_node(nid)
+                QtWidgets.QApplication.processEvents()
+                QtWidgets.QApplication.processEvents()
             executor.on_node_executing = _on_exec_node
             results = executor.execute(inline_values=inline_values)
             self.scene.reset_execution_status()
 
             # 更新内嵌显示控件
             self._update_inline_displays(results)
+            QtWidgets.QApplication.processEvents()
 
             output_lines = []
             for node_id, data in results.items():
@@ -761,6 +764,8 @@ class MainWindow(QtWidgets.QMainWindow):
             from PySide2 import QtWidgets
             def _on_exec_node(nid):
                 self.scene.set_executing_node(nid)
+                QtWidgets.QApplication.processEvents()
+                QtWidgets.QApplication.processEvents()
             executor.on_node_executing = _on_exec_node
 
             # 查找下游节点
@@ -775,6 +780,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 n = self.scene.graph.get_node(nid)
                 if n is None:
                     continue
+
+                # 执行前设高亮
+                _on_exec_node(nid)
 
                 inputs = {}
                 for sock in n.inputs:
