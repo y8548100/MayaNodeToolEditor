@@ -671,13 +671,13 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "收藏失败", str(e))
 
     def _load_tool(self, path: str) -> None:
-        """从工具收藏加载工具 — 加载到编辑器画布（显示内部节点）。"""
+        """从工具收藏加载工具 — 加载到画布（节点可见）并切换到运行面板。"""
         self._load_graph_file(path)
-        # 同步加载到运行面板（方便切换运行）
+        # 同步加载到运行面板
         self.run_panel.set_tool(path)
-        self.sidebar.setCurrentIndex(0)  # 切换到编辑器画布
+        self.sidebar.setCurrentIndex(2)  # 切换到运行面板
         name = os.path.basename(path).replace(".pngraph", "")
-        self.status_bar.showMessage(f"已加载工具「{name}」，可在画布中编辑，或切换到运行面板执行")
+        self.status_bar.showMessage(f"已加载工具「{name}」，可在运行面板中执行，或切换到编辑器查看节点")
 
     def _on_tool_open_in_editor(self, path: str) -> None:
         """从运行面板点击「在编辑器中打开」— 加载到画布编辑。"""
