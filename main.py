@@ -904,7 +904,6 @@ def launch() -> QtWidgets.QMainWindow:
     import __main__
     __main__._hermes_maya_window = window
 
-    global _launch_instance
     _launch_instance = window
 
     return window
