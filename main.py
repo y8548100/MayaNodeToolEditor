@@ -20,6 +20,7 @@ from MayaNodeToolEditor.ui.node_library import NodeLibraryWidget
 from MayaNodeToolEditor.ui.node_widget import NodeWidget
 from MayaNodeToolEditor.ui.code_editor import CodeEditorDialog
 from MayaNodeToolEditor.ui.saved_tools_panel import SavedToolsPanel, TOOLS_DIR
+from MayaNodeToolEditor.ui.tool_run_panel import ToolRunPanel
 from MayaNodeToolEditor.export.export_script import compile_to_script
 
 
@@ -100,10 +101,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tools_panel = SavedToolsPanel(self)
         self.tools_panel.tool_loaded.connect(self._load_tool)
 
-        # 左侧标签页：节点库 | 工具收藏
+        # 左侧标签页：节点库 | 工具收藏 | 运行面板
         self.sidebar = QtWidgets.QTabWidget()
         self.sidebar.addTab(self.library, "📦 节点库")
         self.sidebar.addTab(self.tools_panel, "🔧 工具收藏")
+
+        # 工具运行面板（第三标签页）
+        self.run_panel = ToolRunPanel(self)
+        self.run_panel.open_in_editor.connect(self._on_tool_open_in_editor)
+        self.sidebar.addTab(self.run_panel, "▶ 运行面板")
         self.sidebar.setStyleSheet("""
             QTabWidget::pane { border: none; background: #252526; }
             QTabBar::tab {
@@ -637,9 +643,17 @@ class MainWindow(QtWidgets.QMainWindow):
         safe_name = name.strip().replace("/", "_").replace("\\", "_")
         path = os.path.join(TOOLS_DIR, f"{safe_name}.pngraph")
 
+        # 推导 UI 规格
+        from MayaNodeToolEditor.core.tool_ui import derive_ui_spec
+        spec = derive_ui_spec(self.scene.graph)
+        self.scene.graph.ui_spec = spec.to_dict()
+        self.scene.graph.name = name.strip()
+        desc = f"节点数: {len(self.scene.graph.nodes)}，连线数: {len(self.scene.graph.connections)}"
+        if spec.inputs:
+            desc += f"，{len(spec.inputs)} 个参数"
+        self.scene.graph.description = desc
+
         graph_data = self.scene.graph.to_dict()
-        graph_data["name"] = name.strip()
-        graph_data["description"] = f"节点数: {len(graph_data['nodes'])}，连线数: {len(graph_data['connections'])}"
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -651,8 +665,16 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "收藏失败", str(e))
 
     def _load_tool(self, path: str) -> None:
-        """从工具收藏加载工具图。"""
+        """从工具收藏加载工具 — 在运行面板中打开（而非加载到画布）。"""
+        self.run_panel.set_tool(path)
+        self.sidebar.setCurrentIndex(2)  # 切换到运行面板
+        name = os.path.basename(path).replace(".pngraph", "")
+        self.status_bar.showMessage(f"已加载工具「{name}」，在运行面板中填参执行")
+
+    def _on_tool_open_in_editor(self, path: str) -> None:
+        """从运行面板点击「在编辑器中打开」— 加载到画布编辑。"""
         self._load_graph_file(path)
+        self.status_bar.showMessage(f"工具已在编辑器中打开，可在画布中修改后重新收藏")
 
     # ========== 执行 ==========
 

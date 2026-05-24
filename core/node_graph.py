@@ -18,6 +18,8 @@ class NodeGraph:
         self.name: str = name
         self.nodes: Dict[str, Node] = {}      # node_id → Node
         self.connections: Dict[str, Connection] = {}  # conn_id → Connection
+        self.ui_spec: Optional[Dict[str, Any]] = None  # UI面板规格（工具模式用）
+        self.description: str = ""
 
     def add_node(self, node: Node) -> Node:
         self.nodes[node.node_id] = node
@@ -55,13 +57,17 @@ class NodeGraph:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
+            "description": self.description,
             "nodes": [n.to_dict() for n in self.nodes.values()],
             "connections": [c.to_dict() for c in self.connections.values()],
+            "ui_spec": self.ui_spec,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> NodeGraph:
         graph = cls(name=data.get("name", "Untitled"))
+        graph.description = data.get("description", "")
+        graph.ui_spec = data.get("ui_spec")
         for n_data in data.get("nodes", []):
             node = Node.from_dict(n_data)
             graph.nodes[node.node_id] = node
