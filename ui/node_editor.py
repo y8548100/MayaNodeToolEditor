@@ -28,9 +28,15 @@ class ConnectionLine(QtWidgets.QGraphicsPathItem):
         self.conn = conn
         self.source_socket = source_socket
         self.target_socket = target_socket
-        self.setPen(QtGui.QPen(QtGui.QColor("#888"), 2))
+        self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
+        self.setAcceptHoverEvents(True)
+        self._normal_pen = QtGui.QPen(QtGui.QColor("#888"), 2)
+        self._selected_pen = QtGui.QPen(QtGui.QColor("#FFD700"), 3)
+        self._hover_pen = QtGui.QPen(QtGui.QColor("#AAA"), 2.5)
+        self.setPen(self._normal_pen)
         self.setBrush(Qt.NoBrush)
         self.setZValue(-1)
+        self._hovered = False
         self._update_path()
 
     def _update_path(self) -> None:
@@ -44,6 +50,28 @@ class ConnectionLine(QtWidgets.QGraphicsPathItem):
         path.moveTo(p1)
         path.cubicTo(cp1, cp2, p2)
         self.setPath(path)
+
+    def paint(self, painter: QtGui.QPainter,
+              option: QtWidgets.QStyleOptionGraphicsItem,
+              widget: Optional[QtWidgets.QWidget] = None) -> None:
+        if self.isSelected():
+            painter.setPen(self._selected_pen)
+        elif self._hovered:
+            painter.setPen(self._hover_pen)
+        else:
+            painter.setPen(self._normal_pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(self.path())
+
+    def hoverEnterEvent(self, event: QtWidgets.QGraphicsSceneHoverEvent) -> None:
+        self._hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event: QtWidgets.QGraphicsSceneHoverEvent) -> None:
+        self._hovered = False
+        self.update()
+        super().hoverLeaveEvent(event)
 
     def update_position(self) -> None:
         self._update_path()
@@ -562,6 +590,10 @@ class NodeEditorView(QtWidgets.QGraphicsView):
                 self._show_group_context_menu(item, event.globalPos())
                 event.accept()
                 return
+            elif isinstance(item, ConnectionLine):
+                self._show_connection_context_menu(item, event.globalPos())
+                event.accept()
+                return
             else:
                 # 空白处右键：检查是否有选中的节点
                 selected = [i for i in self.editor_scene.selectedItems()
@@ -739,9 +771,41 @@ class NodeEditorView(QtWidgets.QGraphicsView):
         except Exception:
             pass
 
+    def _show_connection_context_menu(self, line: ConnectionLine,
+                                      global_pos: Any) -> None:
+        """连线右键菜单——删除连线。"""
+        menu = QtWidgets.QMenu()
+        menu.setStyleSheet("""
+            QMenu { background: #2D2D30; color: #CCC; border: 1px solid #555; }
+            QMenu::item:selected { background: #094771; }
+        """)
+
+        # 显示从哪个节点到哪个节点
+        src = self.editor_scene.graph.get_node(line.conn.source_node_id)
+        tgt = self.editor_scene.graph.get_node(line.conn.target_node_id)
+        src_name = src.name if src else "?"
+        tgt_name = tgt.name if tgt else "?"
+        info_action = menu.addAction(f"🔗 {src_name}.{line.conn.source_socket} → {tgt_name}.{line.conn.target_socket}")
+        info_action.setEnabled(False)
+
+        menu.addSeparator()
+
+        delete_action = menu.addAction("❌ 删除连线")
+        delete_action.triggered.connect(
+            lambda: self.editor_scene.remove_connection_line(line.conn.conn_id))
+
+        menu.exec_(global_pos)
+
     def keyPressEvent(self, event: QtWidgets.QKeyEvent) -> None:
-        """键盘快捷键（退格删除、Ctrl+C/V 等由 main 处理）。"""
+        """键盘快捷键（Delete 删节点/连线，退格删、Ctrl+C/V 等由 main 处理）。"""
         if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
+            # 先删选中连线
+            selected_lines = [item for item in self.editor_scene.selectedItems()
+                              if isinstance(item, ConnectionLine)]
+            for line in selected_lines:
+                self.editor_scene.remove_connection_line(line.conn.conn_id)
+
+            # 再删选中节点
             selected = [item for item in self.editor_scene.selectedItems()
                         if isinstance(item, NodeWidget)]
             for w in selected:
