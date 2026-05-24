@@ -156,6 +156,8 @@ class MainWindow(QtWidgets.QMainWindow):
             exec_mode=exec_mode,
         )
         node.code = template.get("code", "")
+        # 内嵌控件
+        node.inline_widgets = template.get("inline_widgets", [])
         # UI 节点用不同颜色
         if exec_mode == "ui":
             node.color = "#3A6EA5"
@@ -290,10 +292,50 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ========== 执行与导出 ==========
 
+    def _collect_inline_values(self) -> Dict[str, Dict[str, Any]]:
+        """从场景中所有节点收集内嵌控件的值。"""
+        vals: Dict[str, Dict[str, Any]] = {}
+        for nid, widget in self.scene.widget_map.items():
+            inline = widget.get_all_inline_values()
+            if inline:
+                vals[nid] = inline
+        return vals
+
+    def _update_inline_displays(self, results: Dict[str, Dict[str, Any]]) -> None:
+        """将执行结果更新到节点的内嵌显示控件（如打印节点的 text_display）。"""
+        for nid, data in results.items():
+            widget = self.scene.widget_map.get(nid)
+            if widget is None:
+                continue
+            node = self.scene.graph.get_node(nid)
+            if node is None:
+                continue
+            # 更新所有 text_display 类型的内嵌控件
+            for cfg in node.inline_widgets:
+                if cfg.get("type") == "text_display":
+                    name = cfg.get("name", "output")
+                    # 优先用 data 中同名 key，否则用第一个值
+                    if name in data:
+                        widget.set_inline_value(name, str(data[name]))
+                    else:
+                        # 取第一个非系统字段的值
+                        for k, v in data.items():
+                            if k not in ("display", "_raw"):
+                                widget.set_inline_value(name, str(v))
+                                break
+                        else:
+                            widget.set_inline_value(name, str(data))
+
     def _execute_graph(self) -> None:
         try:
+            # 收集内嵌控件值
+            inline_values = self._collect_inline_values()
+
             executor = Executor(self.scene.graph)
-            results = executor.execute()
+            results = executor.execute(inline_values=inline_values)
+
+            # 更新内嵌显示控件
+            self._update_inline_displays(results)
 
             output_lines = []
             for node_id, data in results.items():
@@ -320,7 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_node_run_requested(self, node_id: str) -> None:
         """
         直接运行单个 UI 节点（不跑全图）。
-        收集该节点的输入（连线来源 + 默认值）后执行。
+        收集该节点的输入（连线来源 + 默认值 + 内嵌控件值）后执行。
         """
         node = self.scene.graph.get_node(node_id)
         if node is None:
@@ -335,15 +377,33 @@ class MainWindow(QtWidgets.QMainWindow):
                 and c.target_socket == sock.name
             ]
             if connected:
-                # 上游需要执行才能拿到值 → 这里只给默认值
-                # 直接运行模式下，上游未执行，所以用默认值
                 inputs[sock.name] = sock.default_value
             else:
                 inputs[sock.name] = sock.default_value
 
+        # 合并内嵌控件值
+        widget = self.scene.widget_map.get(node_id)
+        if widget:
+            inline = widget.get_all_inline_values()
+            inputs.update(inline)
+
         try:
             executor = Executor(self.scene.graph)
             result = executor.execute_ui_node(node_id, inputs)
+
+            # 更新内嵌显示控件
+            if widget and result:
+                node = self.scene.graph.get_node(node_id)
+                if node:
+                    for cfg in node.inline_widgets:
+                        if cfg.get("type") == "text_display":
+                            name = cfg.get("name", "output")
+                            if name in result:
+                                widget.set_inline_value(name, str(result[name]))
+                            else:
+                                for k, v in result.items():
+                                    widget.set_inline_value(name, str(v))
+                                    break
 
             self.status_bar.showMessage(f"▶ 已运行 UI 节点: {node.name}")
 

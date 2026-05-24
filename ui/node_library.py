@@ -561,7 +561,97 @@ NODE_UI_CONFIRM = {
     ],
 }
 
-# ====== UI 节点（运行时弹出 Maya 窗口） ======
+# ====== 内嵌控件节点（控件直接显示在节点上） ======
+
+NODE_INLINE_TEXT_INPUT = {
+    "name": "输入文本",
+    "code": '''def run(inputs):
+    """文本输入源节点——内嵌输入框的值直接作为输出。"""
+    text = inputs.get("text", "")
+    return {"text": text}
+''',
+    "inline_widgets": [
+        {"type": "line_edit", "name": "text", "label": "文本", "default": ""},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "text", "type": "string", "desc": "输入的文本"}],
+}
+
+NODE_INLINE_NUMBER_INPUT = {
+    "name": "输入数字",
+    "code": '''def run(inputs):
+    """数字输入源节点。"""
+    val = inputs.get("value", 0)
+    return {"value": val}
+''',
+    "inline_widgets": [
+        {"type": "spin_box", "name": "value", "label": "数值", "default": 0, "min": -9999, "max": 9999},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "value", "type": "int", "desc": "输入的数字"}],
+}
+
+NODE_INLINE_SLIDER = {
+    "name": "滑块输入",
+    "code": '''def run(inputs):
+    """滑块输入源节点。"""
+    val = inputs.get("value", 50)
+    return {"value": val}
+''',
+    "inline_widgets": [
+        {"type": "slider", "name": "value", "label": "滑块", "default": 50, "min": 0, "max": 100},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "value", "type": "int", "desc": "滑块值 0-100"}],
+}
+
+NODE_INLINE_COMBO = {
+    "name": "下拉选择",
+    "code": '''def run(inputs):
+    """下拉选择源节点。"""
+    selected = inputs.get("selected", "")
+    return {"selected": selected}
+''',
+    "inline_widgets": [
+        {"type": "combo", "name": "selected", "label": "选项", "default": "A",
+         "options": ["A", "B", "C", "D"]},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项"}],
+}
+
+NODE_INLINE_CHECKBOX = {
+    "name": "开关",
+    "code": '''def run(inputs):
+    """开关源节点。"""
+    enabled = inputs.get("enabled", False)
+    return {"enabled": enabled}
+''',
+    "inline_widgets": [
+        {"type": "check_box", "name": "enabled", "label": "启用", "default": True},
+    ],
+    "inputs": [],
+    "outputs": [{"name": "enabled", "type": "bool", "desc": "是否启用"}],
+}
+
+# 修改后的打印节点——带内嵌输出显示
+NODE_PRINT_WITH_DISPLAY = {
+    "name": "打印信息",
+    "code": '''def run(inputs):
+    """打印信息并显示在节点上。"""
+    msg = inputs.get("message", "Hello")
+    print(f"[NodeEditor] {msg}")
+    return {"display": msg, "output": msg}
+''',
+    "inline_widgets": [
+        {"type": "text_display", "name": "display", "label": "输出", "default": ""},
+    ],
+    "inputs": [{"name": "message", "type": "string", "default": "Hello", "desc": "要打印的消息"}],
+    "outputs": [
+        {"name": "display", "type": "string", "desc": "显示内容"},
+        {"name": "output", "type": "string", "desc": "消息内容"},
+    ],
+}
 
 NODE_UI_POPUP = {
     "name": "弹出窗口",
@@ -762,15 +852,16 @@ NODE_UI_CUSTOM_FORM = {
 
 # 构建节点库
 BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
-    "UI节点": [
-        NODE_UI_POPUP,
-        NODE_UI_CONFIRM_FORM,
-        NODE_UI_INPUT_FORM,
-        NODE_UI_SLIDER,
-        NODE_UI_FILE_PICKER,
-        NODE_UI_COLOR_PICKER,
-        NODE_UI_LIST_SELECTOR,
-        NODE_UI_CUSTOM_FORM,
+    "内嵌控件": [
+        NODE_INLINE_TEXT_INPUT,
+        NODE_INLINE_NUMBER_INPUT,
+        NODE_INLINE_SLIDER,
+        NODE_INLINE_COMBO,
+        NODE_INLINE_CHECKBOX,
+    ],
+    "工具": [
+        NODE_PRINT_WITH_DISPLAY,
+        NODE_INPUT,
     ],
     "交互": [
         NODE_UI_PROMPT_TEXT,
@@ -806,10 +897,6 @@ BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
     "计算": [
         NODE_ADD,
         NODE_MERGE,
-    ],
-    "工具": [
-        NODE_PRINT,
-        NODE_INPUT,
     ],
 }
 

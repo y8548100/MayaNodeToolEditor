@@ -308,7 +308,204 @@ def show_form(
     return None  # 用户取消
 
 
-# ===================== 自定义工具窗口 =====================
+# ===================== 持久工具窗口（核心！） =====================
+
+# GC 保护：存放所有已创建的工具窗口
+_TOOL_WINDOWS: List[Any] = []
+
+def _gc_protect(win: Any) -> None:
+    """将窗口存入全局列表防 GC。"""
+    _TOOL_WINDOWS.append(win)
+    # 窗口关闭时自动移除
+    try:
+        win.destroyed.connect(lambda: _TOOL_WINDOWS.remove(win) if win in _TOOL_WINDOWS else None)
+    except Exception:
+        pass
+
+
+def show_tool_window(
+    title: str = "工具",
+    width: int = 320,
+    height: int = 400,
+    build_fn: Optional[Callable] = None,
+) -> Any:
+    """
+    创建一个持久 Maya 工具窗口（非模态，不阻塞）。
+    
+    build_fn(window, layout) -> None
+    你在 build_fn 里添加控件和逻辑。
+    
+    返回窗口对象（已防 GC）。
+    """
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        from PySide2.QtCore import Qt
+    except ImportError:
+        print(f"[UI Runtime] show_tool_window (降级): {title}")
+        return None
+
+    # 如果已有同名窗口，先激活它
+    for w in QtWidgets.QApplication.topLevelWidgets():
+        if isinstance(w, QtWidgets.QWidget) and w.windowTitle() == title and w.isVisible():
+            w.raise_()
+            w.activateWindow()
+            return w
+
+    win = QtWidgets.QWidget()
+    win.setWindowTitle(title)
+    win.resize(width, height)
+    win.setAttribute(Qt.WA_DeleteOnClose, False)
+    win.setStyleSheet("""
+        QWidget { background: #2D2D30; color: #CCC; font-size: 12px; }
+        QPushButton {
+            background: #3E3E42; color: #CCC; border: 1px solid #555;
+            padding: 6px 16px; border-radius: 3px;
+        }
+        QPushButton:hover { background: #505050; }
+        QPushButton#primary {
+            background: #007ACC; color: white; border: none;
+        }
+        QPushButton#primary:hover { background: #1A8AD4; }
+        QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+            background: #3E3E42; color: #CCC; border: 1px solid #555;
+            padding: 4px; border-radius: 3px;
+        }
+        QLabel { color: #CCC; }
+        QGroupBox {
+            border: 1px solid #555; border-radius: 4px;
+            margin-top: 8px; padding-top: 14px; color: #CCC;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin; subcontrol-position: top left;
+            padding: 2px 6px; color: #4FC1FF;
+        }
+        QCheckBox, QRadioButton { color: #CCC; spacing: 6px; }
+        QSlider::groove:horizontal { height: 6px; background: #555; border-radius: 3px; }
+        QSlider::handle:horizontal {
+            background: #007ACC; width: 14px; height: 14px;
+            margin: -4px 0; border-radius: 7px;
+        }
+        QListWidget, QTreeWidget { background: #1E1E1E; border: 1px solid #555; color: #CCC; }
+    """)
+
+    layout = QtWidgets.QVBoxLayout(win)
+    layout.setSpacing(6)
+    layout.setContentsMargins(10, 8, 10, 8)
+
+    if build_fn:
+        try:
+            build_fn(win, layout)
+        except Exception as e:
+            import traceback
+            error_label = QtWidgets.QLabel(f"构建失败: {e}")
+            error_label.setStyleSheet("color: #FF4444;")
+            layout.addWidget(error_label)
+
+    win.show()
+    win.raise_()
+    win.activateWindow()
+    _gc_protect(win)
+
+    return win
+
+
+def close_tool_windows(title: Optional[str] = None) -> None:
+    """关闭所有（或指定标题的）工具窗口。"""
+    try:
+        from PySide2 import QtWidgets
+        for w in list(QtWidgets.QApplication.topLevelWidgets()):
+            if isinstance(w, QtWidgets.QWidget):
+                if title is None or w.windowTitle() == title:
+                    w.close()
+    except ImportError:
+        pass
+
+
+# ===================== 预置工具窗口 =====================
+
+def show_rename_tool(
+    title: str = "批量改名工具",
+) -> Any:
+    """预置的批量改名工具窗口。"""
+    def build(win: Any, layout: Any) -> None:
+        from PySide2 import QtWidgets, QtCore
+        from PySide2.QtCore import Qt
+
+        # 标题
+        lbl = QtWidgets.QLabel("批量改名工具")
+        lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #4FC1FF;")
+        layout.addWidget(lbl)
+
+        # 前缀
+        prefix_row = QtWidgets.QHBoxLayout()
+        prefix_row.addWidget(QtWidgets.QLabel("前缀:"))
+        prefix_input = QtWidgets.QLineEdit("")
+        prefix_row.addWidget(prefix_input)
+        layout.addLayout(prefix_row)
+
+        # 后缀
+        suffix_row = QtWidgets.QHBoxLayout()
+        suffix_row.addWidget(QtWidgets.QLabel("后缀:"))
+        suffix_input = QtWidgets.QLineEdit("")
+        suffix_row.addWidget(suffix_row)
+        layout.addLayout(suffix_row)
+
+        # 搜索替换
+        find_row = QtWidgets.QHBoxLayout()
+        find_row.addWidget(QtWidgets.QLabel("查找:"))
+        find_input = QtWidgets.QLineEdit("")
+        find_row.addWidget(find_input)
+        replace_input = QtWidgets.QLineEdit("")
+        replace_input.setPlaceholderText("替换为")
+        find_row.addWidget(replace_input)
+        layout.addLayout(find_row)
+
+        # 动作按钮
+        btn_row = QtWidgets.QHBoxLayout()
+        preview_btn = QtWidgets.QPushButton("预览")
+        preview_btn.setObjectName("primary")
+        apply_btn = QtWidgets.QPushButton("执行改名")
+
+        output = QtWidgets.QTextEdit()
+        output.setReadOnly(True)
+        output.setMaximumHeight(120)
+        output.setStyleSheet("background: #1E1E1E; color: #CCC; border: 1px solid #555;")
+        output.setPlaceholderText("预览结果...")
+
+        def on_preview():
+            try:
+                import maya.cmds as cmds
+                sel = cmds.ls(selection=True) or []
+                prefix = prefix_input.text()
+                suffix = suffix_input.text()
+                new_names = []
+                for obj in sel:
+                    new_name = prefix + obj + suffix
+                    new_names.append(new_name)
+                output.setText("\n".join(new_names))
+            except ImportError:
+                output.setText("[预览] Maya 未连接")
+
+        def on_apply():
+            try:
+                import maya.cmds as cmds
+                sel = cmds.ls(selection=True) or []
+                prefix = prefix_input.text()
+                suffix = suffix_input.text()
+                for obj in sel:
+                    cmds.rename(obj, prefix + obj + suffix)
+                output.setText("改名完成！")
+            except ImportError:
+                output.setText("[执行] Maya 未连接")
+
+        preview_btn.clicked.connect(on_preview)
+        apply_btn.clicked.connect(on_apply)
+        btn_row.addWidget(preview_btn)
+        btn_row.addWidget(apply_btn)
+        layout.addLayout(btn_row)
+        layout.addWidget(output)
+
+    return show_tool_window(title=title, width=380, height=320, build_fn=build)
 
 def show_window(
     title: str,

@@ -23,14 +23,17 @@ class Executor:
         self.graph = graph
         self.results: Dict[str, Dict[str, Any]] = {}  # node_id → {socket: value}
         self.errors: Dict[str, str] = {}
+        self._inline_values: Dict[str, Dict[str, Any]] = {}
 
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, inline_values: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         执行整个节点图。
+        inline_values: {node_id: {widget_name: value}} — 内嵌控件的值
         返回 {node_id: {socket: value}} 或抛出异常。
         """
         self.results = {}
         self.errors = {}
+        self._inline_values = inline_values or {}
 
         order = self.graph.topological_sort()
 
@@ -41,6 +44,11 @@ class Executor:
 
             # 收集输入
             inputs = self._resolve_inputs(node)
+
+            # 合并内嵌控件值
+            inline_vals = self._resolve_inline_values(node)
+            for k, v in inline_vals.items():
+                inputs[k] = v
 
             # 执行节点代码
             try:
@@ -106,6 +114,10 @@ class Executor:
                 inputs[sock.name] = sock.default_value
 
         return inputs
+
+    def _resolve_inline_values(self, node: Node) -> Dict[str, Any]:
+        """获取节点的内嵌控件值。"""
+        return self._inline_values.get(node.node_id, {})
 
     def _run_node(self, node: Node, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

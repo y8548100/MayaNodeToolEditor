@@ -44,6 +44,9 @@ class Node:
         self.pos_x: float = 0.0
         self.pos_y: float = 0.0
 
+        # 内嵌控件（如输入框、滑块等，直接显示在节点上）
+        self.inline_widgets: List[Dict[str, Any]] = []
+
     def add_input(self, name: str, data_type: DataType = DataType.ANY,
                   default: Any = None, desc: str = "") -> SocketDef:
         sock = SocketDef(name, data_type, SocketDirection.INPUT, default, desc)
@@ -69,6 +72,7 @@ class Node:
             "is_compound": self.is_compound,
             "pos_x": self.pos_x,
             "pos_y": self.pos_y,
+            "inline_widgets": self.inline_widgets,
         }
         if self.is_compound and self.sub_graph:
             data["sub_graph"] = self.sub_graph
@@ -88,6 +92,7 @@ class Node:
         node.sub_graph = data.get("sub_graph")
         node.pos_x = data.get("pos_x", 0.0)
         node.pos_y = data.get("pos_y", 0.0)
+        node.inline_widgets = data.get("inline_widgets", [])
 
         for s_data in data.get("inputs", []):
             node.inputs.append(SocketDef.from_dict(s_data))
