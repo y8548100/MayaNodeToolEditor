@@ -473,9 +473,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status_bar.showMessage(f"已添加节点 {node.name}")
 
     def _on_node_double_click(self, node_id: str) -> None:
-        """双击节点打开代码编辑器（非模态，不阻塞监听器）。"""
+        """双击节点打开代码编辑器（非模态，不阻塞监听器）。起始节点不可编辑。"""
         node = self.scene.graph.get_node(node_id)
         if node is None:
+            return
+        if node.is_start_node:
+            self.status_bar.showMessage("起始节点不可编辑")
             return
 
         # 如果已有该节点的编辑器窗口，激活它

@@ -120,6 +120,69 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
         self.setSceneRect(-2000, -2000, 4000, 4000)
         self.setBackgroundBrush(QtGui.QColor("#1E1E1E"))
 
+    # ========== 拖拽放置 (从节点库拖入) ==========
+
+    def dragEnterEvent(self, event: QtWidgets.QGraphicsSceneDragDropEvent) -> None:
+        if event.mimeData().hasFormat("application/x-node-template"):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QtWidgets.QGraphicsSceneDragDropEvent) -> None:
+        if event.mimeData().hasFormat("application/x-node-template"):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QtWidgets.QGraphicsSceneDragDropEvent) -> None:
+        if event.mimeData().hasFormat("application/x-node-template"):
+            import json
+            raw = event.mimeData().data("application/x-node-template").data()
+            try:
+                template = json.loads(raw.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                event.ignore()
+                return
+
+            # 通知 MainWindow 添加节点 (通过信号)
+            from MayaNodeToolEditor.core.node import Node
+            from MayaNodeToolEditor.core.types import DataType
+
+            exec_mode = template.get("exec_mode", "code")
+            node = Node(
+                name=template.get("name", "NewNode"),
+                category="自定义",
+                exec_mode=exec_mode,
+            )
+            node.code = template.get("code", "")
+            node.inline_widgets = template.get("inline_widgets", [])
+            if exec_mode == "ui" or node.inline_widgets:
+                node.color = "#3A6EA5"
+
+            for inp in template.get("inputs", []):
+                node.add_input(
+                    name=inp.get("name", "input"),
+                    data_type=DataType(inp.get("type", "any")),
+                    default=inp.get("default"),
+                    desc=inp.get("desc", ""),
+                )
+            for out in template.get("outputs", []):
+                node.add_output(
+                    name=out.get("name", "output"),
+                    data_type=DataType(out.get("type", "any")),
+                    description=out.get("desc", ""),
+                )
+
+            # 放在鼠标释放位置
+            drop_pos = event.scenePos()
+            node.pos_x = drop_pos.x() - 90  # 居中 (NODE_WIDTH/2)
+            node.pos_y = drop_pos.y() - 14  # 居中 (NODE_HEADER_H/2)
+
+            self.add_node_widget(node)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
+
     # ========== 添加/移除节点 ==========
 
     def add_node_widget(self, node: NodeModel) -> NodeWidget:
@@ -729,6 +792,16 @@ class NodeEditorView(QtWidgets.QGraphicsView):
             QMenu { background: #2D2D30; color: #CCC; border: 1px solid #555; }
             QMenu::item:selected { background: #094771; }
         """)
+
+        # 起始节点：只可拖动，不可编辑
+        if widget.node.is_start_node:
+            info_action = menu.addAction("🟢 起始节点 — 执行入口，仅可拖动")
+            info_action.setEnabled(False)
+            menu.addSeparator()
+            info_action2 = menu.addAction("不可编辑，不可删除")
+            info_action2.setEnabled(False)
+            menu.exec_(global_pos)
+            return
 
         edit_action = menu.addAction("✏️ 编辑代码")
         edit_action.triggered.connect(
