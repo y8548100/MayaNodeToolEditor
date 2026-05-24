@@ -157,23 +157,30 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
             self._cleanup_drag()
             return
 
+        source_sock = self._drag_source
         target = self._find_socket_at(pos)
-        if target and target != self._drag_source:
-            conn = ConnectionModel(
-                source_node_id=target.node_widget.node.node_id
-                    if target.socket_def.direction.value == "output"
-                    else self._drag_source.node_widget.node.node_id,
-                source_socket=target.socket_def.name
-                    if target.socket_def.direction.value == "output"
-                    else self._drag_source.socket_def.name,
-                target_node_id=self._drag_source.node_widget.node.node_id
-                    if target.socket_def.direction.value == "output"
-                    else target.node_widget.node.node_id,
-                target_socket=self._drag_source.socket_def.name
-                    if target.socket_def.direction.value == "output"
-                    else target.socket_def.name,
-            )
-            self.add_connection_line(conn)
+        if target and target != source_sock:
+            # 只允许 Output → Input
+            src_is_out = source_sock.socket_def.direction.value == "output"
+            tgt_is_in = target.socket_def.direction.value == "input"
+
+            if src_is_out and tgt_is_in:
+                conn = ConnectionModel(
+                    source_node_id=source_sock.node_widget.node.node_id,
+                    source_socket=source_sock.socket_def.name,
+                    target_node_id=target.node_widget.node.node_id,
+                    target_socket=target.socket_def.name,
+                )
+                self.add_connection_line(conn)
+            elif not src_is_out and tgt_is_in:
+                # 从 Input 拖到 Input → 反向创建
+                conn = ConnectionModel(
+                    source_node_id=target.node_widget.node.node_id,
+                    source_socket=target.socket_def.name,
+                    target_node_id=source_sock.node_widget.node.node_id,
+                    target_socket=source_sock.socket_def.name,
+                )
+                self.add_connection_line(conn)
 
         self._cleanup_drag()
 
@@ -211,7 +218,7 @@ class NodeEditorView(QtWidgets.QGraphicsView):
 
         self.setRenderHint(QPainter.Antialiasing)
         self.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
+        self.setViewportUpdateMode(QtWidgets.QGraphicsView.MinimalViewportUpdate)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
@@ -267,8 +274,14 @@ class NodeEditorView(QtWidgets.QGraphicsView):
             return
 
         super().mouseMoveEvent(event)
-        # 节点拖动时更新连线
-        self.editor_scene.update_all_connections()
+        # 性能优化：只更新被拖动节点的相关连线，不重建全部
+        moving_items = [i for i in self.items() if isinstance(i, NodeWidget) and i.isMoving()]
+        if moving_items:
+            moving_ids = {w.node.node_id for w in moving_items}
+            for cid, line in list(self.editor_scene.connection_lines.items()):
+                if (line.conn.source_node_id in moving_ids or
+                        line.conn.target_node_id in moving_ids):
+                    line.update_position()
 
     def mouseReleaseEvent(self, event: QtWidgets.QMouseEvent) -> None:
         if event.button() == Qt.MiddleButton:

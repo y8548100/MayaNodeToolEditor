@@ -90,8 +90,27 @@ class Executor:
             return {s.name: inputs.get(s.name) for s in node.outputs}
 
         local_vars: Dict[str, Any] = {"inputs": inputs}
+        # 隔离执行环境：只暴露安全的內建函数
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "dict": dict, "enumerate": enumerate, "filter": filter,
+            "float": float, "format": format, "frozenset": frozenset,
+            "int": int, "isinstance": isinstance, "iter": iter,
+            "len": len, "list": list, "map": map, "max": max,
+            "min": min, "next": next, "object": object,
+            "pow": pow, "range": range, "reversed": reversed,
+            "round": round, "set": set, "slice": slice,
+            "sorted": sorted, "str": str, "sum": sum,
+            "tuple": tuple, "type": type, "zip": zip,
+            "True": True, "False": False, "None": None,
+            "print": print, "Exception": Exception,
+            "ValueError": ValueError, "TypeError": TypeError,
+            "KeyError": KeyError, "IndexError": IndexError,
+            "RuntimeError": RuntimeError, "AttributeError": AttributeError,
+            "__import__": __import__,  # 保留模块导入能力
+        }
         try:
-            exec(node.code, {"__builtins__": __builtins__}, local_vars)
+            exec(node.code, {"__builtins__": safe_builtins}, local_vars)
         except Exception as e:
             raise RuntimeError(f"节点 [{node.name}] 代码执行失败: {e}") from e
 

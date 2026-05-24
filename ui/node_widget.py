@@ -99,8 +99,26 @@ class NodeWidget(QtWidgets.QGraphicsItem):
 
         # 选中状态
         self._hovered = False
+        self._is_moving = False
 
         self.setPos(node.pos_x, node.pos_y)
+
+    def itemChange(self, change: QtWidgets.QGraphicsItem.GraphicsItemChange,
+                   value: Any) -> Any:
+        if change == QtWidgets.QGraphicsItem.ItemPositionHasChanged:
+            self._is_moving = True
+        elif change == QtWidgets.QGraphicsItem.ItemPositionChange:
+            self._is_moving = True
+        return super().itemChange(change, value)
+
+    def isMoving(self) -> bool:
+        return self._is_moving
+
+    def mousePressEvent(self, event: QtWidgets.QGraphicsSceneMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
+            self._is_moving = False
+            self.setCursor(Qt.ClosedHandCursor)
+        super().mousePressEvent(event)
 
     def _create_sockets(self) -> None:
         for sock in self.node.inputs:

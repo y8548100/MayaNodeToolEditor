@@ -20,95 +20,8 @@ from MayaNodeToolEditor.ui.node_editor import NodeEditorScene, NodeEditorView
 from MayaNodeToolEditor.ui.node_library import NodeLibraryWidget
 from MayaNodeToolEditor.ui.node_widget import NodeWidget
 from MayaNodeToolEditor.ui.code_editor import CodeEditorDialog
-
-
-# 工具收藏目录（与 main.py 同目录下的 tools/）
-TOOLS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools")
-
-
-class SavedToolsPanel(QtWidgets.QWidget):
-    """工具收藏面板 — 显示可用的已保存工具图。"""
-
-    tool_loaded = Signal(str)  # 发射工具名称
-
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
-        super().__init__(parent)
-        self.setMinimumWidth(200)
-        self.setMaximumWidth(300)
-        self.setStyleSheet("""
-            QWidget { background: #252526; color: #CCC; }
-            QListWidget { background: #1E1E1E; border: 1px solid #3E3E42;
-                          font-size: 12px; }
-            QListWidget::item { padding: 8px 6px; border-bottom: 1px solid #333; }
-            QListWidget::item:selected { background: #094771; }
-            QListWidget::item:hover { background: #2A2D2E; }
-            QPushButton {
-                background: #0E639C; color: white; border: none;
-                padding: 5px 12px; border-radius: 3px; font-size: 11px;
-            }
-            QPushButton:hover { background: #1177BB; }
-            QLabel { color: #888; font-size: 11px; padding: 4px; }
-        """)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
-
-        title = QtWidgets.QLabel("🔧 工具收藏")
-        title.setStyleSheet("font-size: 12px; font-weight: bold; padding: 4px; color: #CCC;")
-        layout.addWidget(title)
-
-        self.tool_list = QtWidgets.QListWidget()
-        self.tool_list.setAlternatingRowColors(True)
-        self.tool_list.itemDoubleClicked.connect(self._on_load_tool)
-        layout.addWidget(self.tool_list)
-
-        btn_layout = QtWidgets.QHBoxLayout()
-        refresh_btn = QtWidgets.QPushButton("刷新")
-        refresh_btn.clicked.connect(self.refresh_list)
-        btn_layout.addWidget(refresh_btn)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-
-        self.refresh_list()
-
-    def refresh_list(self) -> None:
-        """扫描 tools/ 目录，刷新工具列表。"""
-        self.tool_list.clear()
-        if not os.path.isdir(TOOLS_DIR):
-            os.makedirs(TOOLS_DIR, exist_ok=True)
-            self.tool_list.addItem("（尚无收藏的工具）")
-            return
-
-        files = sorted([f for f in os.listdir(TOOLS_DIR) if f.endswith(".pngraph")])
-        if not files:
-            self.tool_list.addItem("（尚无收藏的工具）")
-            return
-
-        for fn in files:
-            path = os.path.join(TOOLS_DIR, fn)
-            try:
-                graph = NodeGraph.load(path)
-                name = graph.name if graph.name else fn.replace(".pngraph", "")
-                desc = graph.to_dict().get("description", "")
-                # 显示名称 + 节点数
-                item_text = f"{name}\n  ({len(graph.nodes)}个节点 · {len(graph.connections)}条连线)"
-                if desc:
-                    item_text = f"{name}\n  {desc}"
-                item = QtWidgets.QListWidgetItem(item_text)
-                item.setData(Qt.UserRole, path)
-                item.setToolTip(f"双击加载\n路径: {path}")
-                self.tool_list.addItem(item)
-            except Exception as e:
-                item = QtWidgets.QListWidgetItem(f"⚠️ {fn}")
-                item.setToolTip(str(e))
-                self.tool_list.addItem(item)
-
-    def _on_load_tool(self, item: QtWidgets.QListWidgetItem) -> None:
-        """双击工具项时加载。"""
-        path = item.data(Qt.UserRole)
-        if path and os.path.exists(path):
-            self.tool_loaded.emit(path)
+from MayaNodeToolEditor.ui.saved_tools_panel import SavedToolsPanel, TOOLS_DIR
+from MayaNodeToolEditor.export.export_script import compile_to_script
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -407,7 +320,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            script = self._compile_to_script()
+            script = compile_to_script(self.scene.graph)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(script)
             self.status_bar.showMessage(f"已导出: {path}")
@@ -415,86 +328,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self, "导出成功", f"脚本已导出到:\n{path}")
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "导出失败", str(e))
-
-    def _compile_to_script(self) -> str:
-        graph = self.scene.graph
-        lines = [
-            "# -*- coding: utf-8 -*-",
-            "# 由 MayaNodeToolEditor 自动生成",
-            f"# 工具: {graph.name}",
-            f"# 节点数: {len(graph.nodes)}  连线数: {len(graph.connections)}",
-            "",
-            "import sys",
-            "import traceback",
-            "",
-            "",
-        ]
-
-        try:
-            order = graph.topological_sort()
-        except ValueError as e:
-            raise RuntimeError(str(e)) from e
-
-        for node_id in order:
-            node = graph.get_node(node_id)
-            if not node or not node.code.strip():
-                continue
-
-            lines.append(f"# === 节点: {node.name} ({node.node_id[:8]}) ===")
-            lines.append(f"def _node_{node.node_id[:8]}(inputs):")
-            code_lines = node.code.strip().split("\n")
-            for cl in code_lines:
-                lines.append(f"    {cl}")
-            lines.append("")
-            lines.append("")
-
-        lines.append("def main():")
-        lines.append("    results = {}")
-        lines.append("")
-
-        for node_id in order:
-            node = graph.get_node(node_id)
-            if not node:
-                continue
-            short_id = node.node_id[:8]
-            lines.append(f"    # === {node.name} ===")
-
-            inputs_parts = []
-            for sock in node.inputs:
-                connected = [
-                    c for c in graph.connections.values()
-                    if c.target_node_id == node_id and c.target_socket == sock.name
-                ]
-                if connected:
-                    conn = connected[0]
-                    src_short = conn.source_node_id[:8]
-                    src_sock = conn.source_socket
-                    inputs_parts.append(
-                        f'"{sock.name}": results.get("{src_short}", {{}}).get("{src_sock}")'
-                    )
-                else:
-                    val = json.dumps(sock.default_value, ensure_ascii=False)
-                    inputs_parts.append(f'"{sock.name}": {val}')
-
-            inputs_str = ", ".join(inputs_parts)
-            lines.append(f"    _inputs_{short_id} = {{{inputs_str}}}")
-            lines.append(f"    try:")
-            lines.append(f"        results['{short_id}'] = _node_{short_id}(_inputs_{short_id})")
-            lines.append(f"    except Exception as e:")
-            lines.append(f"        print(f'[ERROR] 节点 [{node.name}] 执行失败: {{e}}')")
-            lines.append(f"        traceback.print_exc()")
-            lines.append(f"        results['{short_id}'] = {{}}")
-            lines.append("")
-
-        lines.append('    print("=== 执行完成 ===")')
-        lines.append("    for k, v in results.items():")
-        lines.append("        print(f'  [{k}] {v}')")
-        lines.append("")
-        lines.append("")
-        lines.append('if __name__ == "__main__":')
-        lines.append("    main()")
-
-        return "\n".join(lines)
 
 
 def launch() -> QtWidgets.QMainWindow:
@@ -505,6 +338,11 @@ def launch() -> QtWidgets.QMainWindow:
 
     window = MainWindow()
     window.show()
+
+    # 防 GC：存到 __main__ 模块
+    import __main__
+    __main__._hermes_maya_window = window
+
     return window
 
 
@@ -513,10 +351,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
-# watch-test
-
-# sync-test-1779623325
-
-# sync-1779623352
-
-# watch-sync-1779623520
