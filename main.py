@@ -1,18 +1,16 @@
+from __future__ import annotations
 """
 MayaNodeToolEditor — Maya 内可视化代码节点编辑器入口。
 """
 
-from __future__ import annotations
-
-import json
 import os
 import sys
 from typing import Any, Dict, List, Optional
 
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt, QRect, QPoint, Signal
+from PySide2.QtCore import Qt
 
-from MayaNodeToolEditor.core.node import Node, Connection
+from MayaNodeToolEditor.core.node import Node, Connection as ConnModel
 from MayaNodeToolEditor.core.node_graph import NodeGraph
 from MayaNodeToolEditor.core.executor import Executor
 from MayaNodeToolEditor.core.types import DataType, SocketDirection

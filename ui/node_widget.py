@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 节点UI组件 — PySide2 QGraphicsItem 实现的视觉节点。
 """
 
-from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -208,6 +208,7 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QtWidgets.QGraphicsSceneMouseEvent) -> None:
+        self._is_moving = False
         self.setCursor(Qt.OpenHandCursor)
         self.node.pos_x = self.pos().x()
         self.node.pos_y = self.pos().y()

@@ -2,7 +2,6 @@
 核心层单元测试 — 不依赖 Maya/PySide2。
 """
 
-from __future__ import annotations
 
 import json
 import os

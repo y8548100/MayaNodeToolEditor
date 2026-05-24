@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 工具收藏面板 — 显示可用的已保存工具图，支持双击加载。
 """
 
-from __future__ import annotations
 
 import json
 import os

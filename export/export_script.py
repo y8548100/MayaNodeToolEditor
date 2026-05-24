@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 导出引擎 — 将节点图编译为可执行的 Python 脚本。
 """
 
-from __future__ import annotations
 
 import json
 from typing import Dict, List

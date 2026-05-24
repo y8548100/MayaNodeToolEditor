@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 节点图画布 — PySide2 QGraphicsView/QGraphicsScene 实现。
 """
 
-from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional, Tuple

@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 """
 类型系统 — 节点输入/输出数据类型声明。
 """
 
-from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union

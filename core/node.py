@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 """
 节点数据模型 — 节点、插口、连接的纯数据定义。
 """
 
-from __future__ import annotations
 
 import uuid
 from typing import Any, Dict, List, Optional

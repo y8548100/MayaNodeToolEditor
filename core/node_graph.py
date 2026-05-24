@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 """
 节点图数据 — 管理 Nodes + Connections，提供 JSON 序列化。
 """
 
-from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional

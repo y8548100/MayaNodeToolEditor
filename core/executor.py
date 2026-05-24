@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 执行引擎 — 按拓扑排序顺序执行节点图。
 """
 
-from __future__ import annotations
 
 import traceback
 from typing import Any, Dict, List, Optional

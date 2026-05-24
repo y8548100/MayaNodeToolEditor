@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 代码编辑器窗口 — 双击节点时弹出的 Python 代码编辑对话框。
 """
 
-from __future__ import annotations
 
 from typing import Optional
 
@@ -137,7 +137,7 @@ class SocketRowWidget(QtWidgets.QWidget):
 class SocketListWidget(QtWidgets.QWidget):
     """插口列表编辑器（可增删行）。"""
 
-    def __init__(self, sockets: list = []) -> None:
+    def __init__(self, sockets: Optional[list] = None) -> None:
         super().__init__()
         self._sockets = sockets or []
 

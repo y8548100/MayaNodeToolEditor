@@ -1,8 +1,8 @@
+from __future__ import annotations
 """
 节点库侧栏 — 按分类浏览预设节点，拖放添加到画布。
 """
 
-from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
