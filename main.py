@@ -283,9 +283,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         inputs[sock.name] = sock.default_value
 
-                # 合并内嵌控件值
+                # 合并内嵌控件值（连线值优先，内嵌补充空值）
                 dn_inline = inline_values.get(dn_id, {})
-                inputs.update(dn_inline)
+                for k, v in dn_inline.items():
+                    if k not in inputs or inputs[k] is None:
+                        inputs[k] = v
+                    elif isinstance(inputs[k], str) and inputs[k] == "" and v:
+                        inputs[k] = v
 
                 # 只有 text_display 节点允许空代码执行
                 has_display = any(
@@ -753,10 +757,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         inputs[sock.name] = sock.default_value
 
-                # 合并内嵌控件值
+                # 合并内嵌控件值（连线值优先，内嵌补充空值）
                 inline_vals = inline_values.get(nid, {})
                 for k, v in inline_vals.items():
                     if k not in inputs or inputs[k] is None:
+                        inputs[k] = v
+                    elif isinstance(inputs[k], str) and inputs[k] == "" and v:
                         inputs[k] = v
 
                 # 执行

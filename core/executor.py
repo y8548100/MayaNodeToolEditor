@@ -71,11 +71,13 @@ class Executor:
             # 收集输入
             inputs = self._resolve_inputs(node)
 
-            # 合并内嵌控件值（连线值优先，内嵌值只填未连线的输入）
+            # 合并内嵌控件值（连线值优先，但连线无有效值时代替默认值）
             inline_vals = self._resolve_inline_values(node)
             for k, v in inline_vals.items():
                 if k not in inputs or inputs[k] is None:
                     inputs[k] = v
+                elif isinstance(inputs[k], str) and inputs[k] == "" and v:
+                    inputs[k] = v  # 空字符串 < 内嵌控件的实际值
 
             # 执行节点代码
             try:
