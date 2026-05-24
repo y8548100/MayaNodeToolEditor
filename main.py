@@ -693,22 +693,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 name = node.name if node else "?"
                 output_lines.append(f"[{name}] → {data}")
 
-            msg = " | ".join(output_lines[:5])
-            self.status_bar.showMessage(f"执行完成: {msg}")
-
             if executor.errors:
                 errors = "\n".join(executor.errors.values())
-                QtWidgets.QMessageBox.warning(self, "执行错误", errors)
+                self.status_bar.showMessage(f"⚠️ 执行有错误: {errors[:80]}...", 8000)
             else:
-                output_text = "\n".join(output_lines)
-                QtWidgets.QMessageBox.information(
-                    self, "执行完成",
-                    "所有节点执行成功！\n\n详细结果:\n" + output_text)
+                msg = " | ".join(output_lines[:3])
+                self.status_bar.showMessage(f"✅ 执行完成: {msg}", 5000)
 
         except ValueError as e:
-            QtWidgets.QMessageBox.warning(self, "执行失败", f"图结构错误: {e}")
+            self.status_bar.showMessage(f"❌ 图结构错误: {e}", 8000)
         except RuntimeError as e:
-            QtWidgets.QMessageBox.warning(self, "执行失败", str(e))
+            msg = str(e).split("\n")[0][:80]
+            self.status_bar.showMessage(f"❌ 执行失败: {msg}", 8000)
 
     def _on_node_run_requested(self, node_id: str) -> None:
         """
@@ -786,9 +782,8 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            QtWidgets.QMessageBox.warning(
-                self, "运行失败",
-                f"执行出错:\n{e}")
+            msg = str(e).split("\n")[0][:80]
+            self.status_bar.showMessage(f"❌ 运行失败: {msg}", 8000)
 
     def _export_script(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -800,9 +795,7 @@ class MainWindow(QtWidgets.QMainWindow):
             script = compile_to_script(self.scene.graph)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(script)
-            self.status_bar.showMessage(f"已导出 {path}")
-            QtWidgets.QMessageBox.information(
-                self, "导出成功", f"脚本已导出到:\n{path}")
+            self.status_bar.showMessage(f"✅ 已导出 {path}", 5000)
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "导出失败", str(e))
 
