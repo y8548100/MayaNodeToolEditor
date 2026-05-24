@@ -25,6 +25,7 @@ class UiInput:
         default: Any = None,
         description: str = "",
         widget_type: str = "line_edit",  # 控件类型
+        widget_options: Optional[List[str]] = None,  # 下拉/单选选项
         order: int = 0,         # 显示顺序
     ) -> None:
         self.name = name
@@ -34,6 +35,7 @@ class UiInput:
         self.default = default
         self.description = description
         self.widget_type = widget_type
+        self.widget_options = widget_options or []
         self.order = order
 
     def to_dict(self) -> Dict[str, Any]:
@@ -45,6 +47,7 @@ class UiInput:
             "default": self.default,
             "description": self.description,
             "widget_type": self.widget_type,
+            "widget_options": self.widget_options,
             "order": self.order,
         }
 
@@ -58,6 +61,7 @@ class UiInput:
             default=data.get("default"),
             description=data.get("description", ""),
             widget_type=data.get("widget_type", "line_edit"),
+            widget_options=data.get("widget_options", []),
             order=data.get("order", 0),
         )
 
@@ -177,6 +181,16 @@ def _clean_port_name(name: str) -> str:
     return CLEAN_NAME_MAP.get(name, name)
 
 
+# ====== 下拉框选项映射 ======
+
+COMBOBOX_PORT_OPTIONS: Dict[str, List[str]] = {}
+
+
+def register_combobox_port(port_name: str, options: List[str]) -> None:
+    """注册端口名 → 下拉选项。外部模块（如 rename_tool）可调用。"""
+    COMBOBOX_PORT_OPTIONS[port_name] = options
+
+
 SKIP_INPUT_PORTS = {"run", "exec", "execute", "trigger"}
 SKIP_OUTPUT_PORTS = {"run", "exec", "execute"}
 
@@ -216,6 +230,13 @@ def derive_ui_spec(graph: NodeGraph) -> UiSpec:
 
             widget_type = get_widget_type(sock.data_type, sock.name)
             display_name = _clean_port_name(sock.name)
+            widget_options = COMBOBOX_PORT_OPTIONS.get(
+                sock.name, COMBOBOX_PORT_OPTIONS.get(sock.name.lower(), []))
+
+            # 如果注册了选项，强制用 combo_box
+            if widget_options:
+                widget_type = "combo_box"
+
             inputs.append(UiInput(
                 name=display_name,
                 node_id=node_id,
@@ -224,6 +245,7 @@ def derive_ui_spec(graph: NodeGraph) -> UiSpec:
                 default=sock.default_value,
                 description=sock.description or display_name,
                 widget_type=widget_type,
+                widget_options=widget_options,
                 order=len(inputs),
             ))
 

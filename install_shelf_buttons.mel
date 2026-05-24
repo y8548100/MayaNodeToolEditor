@@ -1,0 +1,28 @@
+// MayaNodeToolEditor 一键安装 shelf 按钮
+// 在 Maya 脚本编辑器（Script Editor）中运行此文件即可
+// MEL 模式运行
+
+// === 安装启动按钮到当前 shelf ===
+string $shelf = `tabLayout -query -selectTab $gShelfTopLevel`;
+
+// 按钮1：启动节点编辑器
+shelfButton -parent $shelf
+    -annotation "打开节点编辑器"
+    -label "NodeEdit"
+    -image "commandButton.png"
+    -imageOverlayLabel "NE"
+    -sourceType "python"
+    -command "import sys; sys.path.insert(0, 'D:/maya_projects'); from MayaNodeToolEditor.main import launch; win = launch()"
+    -style "iconOnly";
+
+// 按钮2：启动运行面板（打开最近使用的工具）
+shelfButton -parent $shelf
+    -annotation "打开工具运行面板"
+    -label "ToolRun"
+    -image "commandButton.png"
+    -imageOverlayLabel "TR"
+    -sourceType "python"
+    -command "import sys; sys.path.insert(0, 'D:/maya_projects'); from MayaNodeToolEditor.ui.tool_run_panel import run_tool_panel; import os; from MayaNodeToolEditor.ui.saved_tools_panel import TOOLS_DIR; tools = [f for f in os.listdir(TOOLS_DIR) if f.endswith('.pngraph')]; run_tool_panel(tools[-1] if tools else '')"
+    -style "iconOnly";
+
+print("✅ 已安装 NodeEdit / ToolRun 按钮到 Maya shelf");

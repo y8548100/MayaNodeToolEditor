@@ -26,7 +26,14 @@ def _create_form_widget(ui_input: UiInput, parent: QtWidgets.QWidget) -> QtWidge
     """根据 UiInput 的 widget_type 创建对应的 Qt 控件。"""
     widget_type = ui_input.widget_type
 
-    if widget_type == "spin_box":
+    if widget_type == "combo_box":
+        w = QtWidgets.QComboBox(parent)
+        w.addItems(ui_input.widget_options)
+        if ui_input.default and ui_input.default in ui_input.widget_options:
+            w.setCurrentText(ui_input.default)
+        w.setMinimumWidth(200)
+
+    elif widget_type == "spin_box":
         w = QtWidgets.QSpinBox(parent)
         w.setRange(-999999, 999999)
         if ui_input.default is not None:
@@ -84,7 +91,9 @@ def _create_form_widget(ui_input: UiInput, parent: QtWidgets.QWidget) -> QtWidge
 
 def _get_widget_value(widget: QtWidgets.QWidget) -> Any:
     """从控件提取当前值。"""
-    if isinstance(widget, QtWidgets.QLineEdit):
+    if isinstance(widget, QtWidgets.QComboBox):
+        return widget.currentText()
+    elif isinstance(widget, QtWidgets.QLineEdit):
         return widget.text()
     elif isinstance(widget, QtWidgets.QSpinBox):
         return widget.value()
@@ -103,7 +112,11 @@ def _get_widget_value(widget: QtWidgets.QWidget) -> Any:
 
 def _set_widget_value(widget: QtWidgets.QWidget, value: Any) -> None:
     """设置控件的值。"""
-    if isinstance(widget, QtWidgets.QLineEdit):
+    if isinstance(widget, QtWidgets.QComboBox):
+        idx = widget.findText(str(value))
+        if idx >= 0:
+            widget.setCurrentIndex(idx)
+    elif isinstance(widget, QtWidgets.QLineEdit):
         widget.setText(str(value) if value is not None else "")
     elif isinstance(widget, QtWidgets.QSpinBox):
         try:
