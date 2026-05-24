@@ -23,12 +23,14 @@ class Node:
         name: str = "NewNode",
         category: str = "通用",
         node_id: Optional[str] = None,
+        exec_mode: str = "code",
     ) -> None:
         self.node_id: str = node_id or uuid.uuid4().hex[:12]
         self.name: str = name
         self.category: str = category
         self.code: str = ""
         self.color: str = "#3A3A3A"
+        self.exec_mode: str = exec_mode  # "code"=直执行, "ui"=弹UI窗
 
         # 插口
         self.inputs: List[SocketDef] = []
@@ -61,6 +63,7 @@ class Node:
             "category": self.category,
             "code": self.code,
             "color": self.color,
+            "exec_mode": self.exec_mode,
             "inputs": [s.to_dict() for s in self.inputs],
             "outputs": [s.to_dict() for s in self.outputs],
             "is_compound": self.is_compound,
@@ -80,6 +83,7 @@ class Node:
         )
         node.code = data.get("code", "")
         node.color = data.get("color", "#3A3A3A")
+        node.exec_mode = data.get("exec_mode", "code")
         node.is_compound = data.get("is_compound", False)
         node.sub_graph = data.get("sub_graph")
         node.pos_x = data.get("pos_x", 0.0)

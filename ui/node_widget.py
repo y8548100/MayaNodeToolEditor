@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from MayaNodeToolEditor.ui.node_editor import NodeEditorScene
 
 
+# UI节点 ▶ 按钮尺寸
+UI_BTN_SIZE = 20
+UI_BTN_MARGIN = 4
+
+
 # 样式常量
 NODE_WIDTH = 180
 NODE_HEADER_H = 28
@@ -96,6 +101,9 @@ class NodeWidget(QtWidgets.QGraphicsItem):
 
         # 缓存高度（基于插口数量）
         self._height = NODE_HEADER_H + max(len(self.input_sockets), len(self.output_sockets), 1) * SOCKET_H + 10
+
+        # UI 节点 ▶ 按钮区域（右上角）
+        self._play_btn_rect = self._get_play_rect() if node.exec_mode == "ui" else None
 
         # 选中状态
         self._hovered = False
@@ -202,6 +210,9 @@ class NodeWidget(QtWidgets.QGraphicsItem):
                              Qt.AlignLeft | Qt.AlignVCenter,
                              sock.name)
 
+        # UI 节点 ▶ 播放按钮
+        self.paint_play_btn(painter)
+
     def mousePressEvent(self, event: QtWidgets.QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.LeftButton:
             self.setCursor(Qt.ClosedHandCursor)
@@ -223,3 +234,45 @@ class NodeWidget(QtWidgets.QGraphicsItem):
         self._hovered = False
         self.update()
         super().hoverLeaveEvent(event)
+
+    # ====== UI 节点 ▶ 直接运行按钮 ======
+
+    def _get_play_rect(self) -> QRectF:
+        """返回 ▶ 按钮区域（标题栏右上角）。"""
+        return QRectF(
+            NODE_WIDTH - UI_BTN_SIZE - UI_BTN_MARGIN,
+            UI_BTN_MARGIN,
+            UI_BTN_SIZE,
+            UI_BTN_SIZE,
+        )
+
+    def is_play_btn_at(self, scene_pos: QPointF) -> bool:
+        """检查场景坐标是否落在 ▶ 按钮上。"""
+        if not self._play_btn_rect:
+            return False
+        local = self.mapFromScene(scene_pos)
+        return self._play_btn_rect.contains(local)
+
+    def paint_play_btn(self, painter: QtGui.QPainter) -> None:
+        """绘制 ▶ 播放按钮（仅 UI 节点）。"""
+        if not self._play_btn_rect:
+            return
+        r = self._play_btn_rect
+        painter.setBrush(QtGui.QColor("#4CAF50"))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(r, 4, 4)
+
+        # ▶ 三角形
+        cx = r.x() + r.width() * 0.45
+        cy = r.y() + r.height() * 0.5
+        size = r.width() * 0.35
+        painter.setBrush(QtGui.QColor("#FFF"))
+        triangle = QtGui.QPainterPath()
+        triangle.moveTo(cx - size * 0.4, cy - size * 0.6)
+        triangle.lineTo(cx + size * 0.4, cy)
+        triangle.lineTo(cx - size * 0.4, cy + size * 0.6)
+        triangle.closeSubpath()
+        painter.drawPath(triangle)
+
+
+# ====== 场景拖拽临时连线 ======

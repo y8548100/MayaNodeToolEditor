@@ -561,8 +561,217 @@ NODE_UI_CONFIRM = {
     ],
 }
 
+# ====== UI 节点（运行时弹出 Maya 窗口） ======
+
+NODE_UI_POPUP = {
+    "name": "弹出窗口",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出信息窗口，返回按钮结果。"""
+    result = ui.show_message(
+        title=inputs.get("title", "提示"),
+        message=inputs.get("message", "你好！"),
+        buttons=inputs.get("buttons", "确定"),
+    )
+    return {"result": result}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "提示", "desc": "窗口标题"},
+        {"name": "message", "type": "string", "default": "你好！", "desc": "显示消息"},
+        {"name": "buttons", "type": "string", "default": "确定", "desc": "按钮（逗号分隔）"},
+    ],
+    "outputs": [{"name": "result", "type": "string", "desc": "按下的按钮名称"}],
+}
+
+NODE_UI_CONFIRM_FORM = {
+    "name": "确认对话框",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """确认/取消对话框。"""
+    confirmed = ui.show_confirm(
+        title=inputs.get("title", "确认"),
+        message=inputs.get("message", "确定继续吗？"),
+        confirm_text=inputs.get("confirm_text", "确定"),
+        cancel_text=inputs.get("cancel_text", "取消"),
+    )
+    return {"confirmed": confirmed, "text": "yes" if confirmed else "no"}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "确认", "desc": "对话框标题"},
+        {"name": "message", "type": "string", "default": "确定继续吗？", "desc": "提示信息"},
+        {"name": "confirm_text", "type": "string", "default": "确定", "desc": "确认按钮文字"},
+        {"name": "cancel_text", "type": "string", "default": "取消", "desc": "取消按钮文字"},
+    ],
+    "outputs": [
+        {"name": "confirmed", "type": "bool", "desc": "用户是否确认"},
+        {"name": "text", "type": "string", "desc": "yes/no"},
+    ],
+}
+
+NODE_UI_INPUT_FORM = {
+    "name": "输入表单",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出表单窗口，支持多种控件类型。"""
+    # fields 由用户自己定义，这里从 inputs 读取预定义字段
+    fields = inputs.get("fields", [
+        {"name": "name", "label": "名称", "type": "string", "default": inputs.get("name", "")},
+        {"name": "count", "label": "数量", "type": "int", "default": inputs.get("count", 1)},
+        {"name": "enabled", "label": "启用", "type": "bool", "default": inputs.get("enabled", True)},
+    ])
+    result = ui.show_form(
+        title=inputs.get("title", "表单输入"),
+        fields=fields,
+    )
+    return result or {}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "表单输入", "desc": "窗口标题"},
+        {"name": "name", "type": "string", "default": "", "desc": "默认名称"},
+        {"name": "count", "type": "int", "default": 1, "desc": "默认数量"},
+        {"name": "enabled", "type": "bool", "default": True, "desc": "默认启用"},
+    ],
+    "outputs": [
+        {"name": "name", "type": "string", "desc": "用户输入的名称"},
+        {"name": "count", "type": "int", "desc": "用户输入的数量"},
+        {"name": "enabled", "type": "bool", "desc": "用户是否勾选"},
+    ],
+}
+
+NODE_UI_SLIDER = {
+    "name": "滑块输入",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出滑块窗口让用户调整数值。"""
+    result = ui.show_form(
+        title=inputs.get("title", "滑块输入"),
+        fields=[
+            {"name": "value", "label": inputs.get("label", "数值"),
+             "type": "slider", "default": inputs.get("default", 50),
+             "min": inputs.get("min", 0), "max": inputs.get("max", 100)},
+        ],
+    )
+    if result is None:
+        return {"value": inputs.get("default", 50)}
+    return result
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "滑块输入", "desc": "窗口标题"},
+        {"name": "label", "type": "string", "default": "数值", "desc": "滑块标签"},
+        {"name": "default", "type": "int", "default": 50, "desc": "默认值"},
+        {"name": "min", "type": "int", "default": 0, "desc": "最小值"},
+        {"name": "max", "type": "int", "default": 100, "desc": "最大值"},
+    ],
+    "outputs": [{"name": "value", "type": "int", "desc": "滑块值"}],
+}
+
+NODE_UI_FILE_PICKER = {
+    "name": "文件选择器",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出文件选择对话框。"""
+    path = ui.show_file_picker(
+        title=inputs.get("title", "选择文件"),
+        file_filter=inputs.get("file_filter", "所有文件 (*.*)"),
+        start_dir=inputs.get("start_dir", ""),
+        mode=inputs.get("mode", "open"),
+    )
+    return {"path": path}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "选择文件", "desc": "对话框标题"},
+        {"name": "file_filter", "type": "string", "default": "所有文件 (*.*)", "desc": "文件过滤"},
+        {"name": "start_dir", "type": "string", "default": "", "desc": "起始目录"},
+        {"name": "mode", "type": "string", "default": "open", "desc": "模式: open/save/directory"},
+    ],
+    "outputs": [{"name": "path", "type": "string", "desc": "选择的文件路径"}],
+}
+
+NODE_UI_COLOR_PICKER = {
+    "name": "颜色选择器",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出颜色选择对话框。"""
+    color = ui.show_color_picker(
+        title=inputs.get("title", "选择颜色"),
+        default_color=inputs.get("default_color", "#FFFFFF"),
+    )
+    return {"color": color}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "选择颜色", "desc": "对话框标题"},
+        {"name": "default_color", "type": "string", "default": "#FFFFFF", "desc": "默认颜色"},
+    ],
+    "outputs": [{"name": "color", "type": "string", "desc": "选择的颜色 hex"}],
+}
+
+NODE_UI_LIST_SELECTOR = {
+    "name": "列表选择器",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """从列表中选择项目。"""
+    items = inputs.get("items", ["选项A", "选项B", "选项C"])
+    result = ui.show_form(
+        title=inputs.get("title", "选择项目"),
+        fields=[
+            {"name": "selected", "label": "请选择",
+             "type": "combo", "default": items[0] if items else "",
+             "options": items},
+        ],
+    )
+    if result is None:
+        return {"selected": items[0] if items else ""}
+    return result
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "选择项目", "desc": "窗口标题"},
+        {"name": "items", "type": "list", "default": ["选项A", "选项B", "选项C"], "desc": "选项列表"},
+    ],
+    "outputs": [{"name": "selected", "type": "string", "desc": "选中的项目"}],
+}
+
+NODE_UI_CUSTOM_FORM = {
+    "name": "自定义表单",
+    "exec_mode": "ui",
+    "code": '''def run(inputs):
+    """弹出完全自定义的表单窗口。"""
+    fields = []
+    for i in range(10):
+        fname = inputs.get(f"field{i}_name", "")
+        ftype = inputs.get(f"field{i}_type", "string")
+        flabel = inputs.get(f"field{i}_label", fname)
+        fdefault = inputs.get(f"field{i}_default", "")
+        if not fname:
+            continue
+        field = {"name": fname, "label": flabel, "type": ftype, "default": fdefault}
+        if ftype == "combo":
+            opts_str = inputs.get(f"field{i}_options", "")
+            field["options"] = [o.strip() for o in opts_str.split(",") if o.strip()] or ["A", "B"]
+        fields.append(field)
+    result = ui.show_form(
+        title=inputs.get("title", "自定义表单"),
+        fields=fields or [{"name": "value", "label": "值", "type": "string", "default": ""}],
+    )
+    return result or {}
+''',
+    "inputs": [
+        {"name": "title", "type": "string", "default": "自定义表单", "desc": "窗口标题"},
+    ],
+    "outputs": [{"name": "value", "type": "string", "desc": "输出值"}],
+}
+
 # 构建节点库
 BUILTIN_NODES: Dict[str, List[Dict[str, Any]]] = {
+    "UI节点": [
+        NODE_UI_POPUP,
+        NODE_UI_CONFIRM_FORM,
+        NODE_UI_INPUT_FORM,
+        NODE_UI_SLIDER,
+        NODE_UI_FILE_PICKER,
+        NODE_UI_COLOR_PICKER,
+        NODE_UI_LIST_SELECTOR,
+        NODE_UI_CUSTOM_FORM,
+    ],
     "交互": [
         NODE_UI_PROMPT_TEXT,
         NODE_UI_PROMPT_NUMBER,

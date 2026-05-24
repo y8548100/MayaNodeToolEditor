@@ -44,7 +44,10 @@ class Executor:
 
             # 执行节点代码
             try:
-                output = self._run_node(node, inputs)
+                if node.exec_mode == "ui":
+                    output = self._run_ui_node(node, inputs)
+                else:
+                    output = self._run_node(node, inputs)
                 self.results[node_id] = output or {}
             except Exception as e:
                 error_msg = f"[{node.name}] {e}\n{traceback.format_exc()}"
@@ -52,6 +55,30 @@ class Executor:
                 raise RuntimeError(error_msg) from e
 
         return self.results
+
+    def execute_ui_node(self, node_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        直接执行单个 UI 节点（不跑全图）。
+        """
+        node = self.graph.get_node(node_id)
+        if node is None:
+            raise ValueError(f"找不到节点: {node_id}")
+        if node.exec_mode != "ui":
+            raise ValueError(f"节点 [{node.name}] 不是 UI 节点")
+
+        self.results[node_id] = self._run_ui_node(node, inputs) or {}
+        return self.results[node_id]
+
+    def execute_node(self, node_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        直接执行单个普通节点。
+        """
+        node = self.graph.get_node(node_id)
+        if node is None:
+            raise ValueError(f"找不到节点: {node_id}")
+
+        self.results[node_id] = self._run_node(node, inputs) or {}
+        return self.results[node_id]
 
     def _resolve_inputs(self, node: Node) -> Dict[str, Any]:
         """
@@ -113,6 +140,55 @@ class Executor:
             exec(node.code, {"__builtins__": safe_builtins}, local_vars)
         except Exception as e:
             raise RuntimeError(f"节点 [{node.name}] 代码执行失败: {e}") from e
+
+        if "run" in local_vars and callable(local_vars["run"]):
+            raw = local_vars["run"](inputs)
+            if raw is None:
+                return {}
+            if not isinstance(raw, dict):
+                return {}
+            return raw
+
+        return {}
+
+    def _run_ui_node(self, node: Node, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        执行单个 UI 节点的代码。
+        与 _run_node 相同但自动注入 ui_runtime 模块到执行环境。
+        """
+        if not node.code.strip():
+            return {s.name: inputs.get(s.name) for s in node.outputs}
+
+        import MayaNodeToolEditor.core.ui_runtime as ui_runtime
+
+        local_vars: Dict[str, Any] = {"inputs": inputs}
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "dict": dict, "enumerate": enumerate, "filter": filter,
+            "float": float, "format": format, "frozenset": frozenset,
+            "int": int, "isinstance": isinstance, "iter": iter,
+            "len": len, "list": list, "map": map, "max": max,
+            "min": min, "next": next, "object": object,
+            "pow": pow, "range": range, "reversed": reversed,
+            "round": round, "set": set, "slice": slice,
+            "sorted": sorted, "str": str, "sum": sum,
+            "tuple": tuple, "type": type, "zip": zip,
+            "True": True, "False": False, "None": None,
+            "print": print, "Exception": Exception,
+            "ValueError": ValueError, "TypeError": TypeError,
+            "KeyError": KeyError, "IndexError": IndexError,
+            "RuntimeError": RuntimeError, "AttributeError": AttributeError,
+            "__import__": __import__,
+        }
+        # ui 模块需注入 globals（函数闭包能访问）而非 local_vars
+        exec_globals: Dict[str, Any] = {
+            "__builtins__": safe_builtins,
+            "ui": ui_runtime,
+        }
+        try:
+            exec(node.code, exec_globals, local_vars)
+        except Exception as e:
+            raise RuntimeError(f"UI节点 [{node.name}] 代码执行失败: {e}") from e
 
         if "run" in local_vars and callable(local_vars["run"]):
             raw = local_vars["run"](inputs)

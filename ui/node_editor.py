@@ -13,7 +13,10 @@ from PySide2.QtGui import QPainter
 
 from MayaNodeToolEditor.core.node import Node as NodeModel, Connection as ConnectionModel
 from MayaNodeToolEditor.core.node_graph import NodeGraph
-from MayaNodeToolEditor.ui.node_widget import NodeWidget, SocketItem, NODE_WIDTH, SOCKET_H, NODE_HEADER_H, SOCKET_RADIUS
+from MayaNodeToolEditor.ui.node_widget import (
+    NodeWidget, SocketItem,
+    NODE_WIDTH, SOCKET_H, NODE_HEADER_H, SOCKET_RADIUS,
+)
 
 
 class ConnectionLine(QtWidgets.QGraphicsPathItem):
@@ -67,6 +70,7 @@ class NodeEditorScene(QtWidgets.QGraphicsScene):
 
     node_selected = Signal(str)  # node_id
     node_double_clicked = Signal(str)  # node_id
+    node_run_requested = Signal(str)  # node_id — UI节点直接运行
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -244,8 +248,25 @@ class NodeEditorView(QtWidgets.QGraphicsView):
             event.accept()
             return
 
-        # 检查是否点击了插口 → 开始连线
         scene_pos = self.mapToScene(event.pos())
+
+        # ▶ 播放按钮点击（UI节点）
+        if event.button() == Qt.LeftButton:
+            item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
+            if isinstance(item, NodeWidget) and item.is_play_btn_at(scene_pos):
+                self.editor_scene.node_run_requested.emit(item.node.node_id)
+                event.accept()
+                return
+
+        # 右键菜单
+        if event.button() == Qt.RightButton:
+            item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
+            if isinstance(item, NodeWidget):
+                self._show_node_context_menu(item, event.globalPos())
+                event.accept()
+                return
+
+        # 检查是否点击了插口 → 开始连线
         item = self.editor_scene.itemAt(scene_pos, QtGui.QTransform())
         if event.button() == Qt.LeftButton and isinstance(item, SocketItem):
             self._is_connecting = True
@@ -299,3 +320,54 @@ class NodeEditorView(QtWidgets.QGraphicsView):
             return
 
         super().mouseReleaseEvent(event)
+
+    # ====== 节点右键菜单 ======
+
+    def _show_node_context_menu(self, widget: NodeWidget,
+                                global_pos: Any) -> None:
+        """显示节点的右键上下文菜单。"""
+        menu = QtWidgets.QMenu()
+        menu.setStyleSheet("""
+            QMenu { background: #2D2D30; color: #CCC; border: 1px solid #555; }
+            QMenu::item:selected { background: #094771; }
+        """)
+
+        # 编辑代码（对所有节点）
+        edit_action = menu.addAction("✏️ 编辑代码")
+        edit_action.triggered.connect(
+            lambda: self.editor_scene.node_double_clicked.emit(
+                widget.node.node_id))
+
+        menu.addSeparator()
+
+        # UI 节点：直接运行
+        if widget.node.exec_mode == "ui":
+            run_action = menu.addAction("▶ 直接运行此节点")
+            run_action.triggered.connect(
+                lambda: self.editor_scene.node_run_requested.emit(
+                    widget.node.node_id))
+            menu.addSeparator()
+
+        # 复制
+        copy_action = menu.addAction("📋 复制")
+        copy_action.triggered.connect(
+            lambda: self._copy_node_to_clipboard(widget))
+
+        # 删除
+        del_action = menu.addAction("🗑️ 删除")
+        del_action.triggered.connect(
+            lambda: self.editor_scene.remove_node_widget(
+                widget.node.node_id))
+
+        menu.exec_(global_pos)
+
+    def _copy_node_to_clipboard(self, widget: NodeWidget) -> None:
+        """将节点数据复制到剪贴板（JSON 格式）。"""
+        import json
+        data = widget.node.to_dict()
+        try:
+            from PySide2 import QtGui
+            clipboard = QtGui.QGuiApplication.clipboard()
+            clipboard.setText(json.dumps(data, ensure_ascii=False, indent=2))
+        except Exception:
+            pass

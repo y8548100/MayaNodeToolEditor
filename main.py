@@ -54,6 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # 场景 + 视图
         self.scene = NodeEditorScene(self)
         self.scene.node_double_clicked.connect(self._on_node_double_click)
+        self.scene.node_run_requested.connect(self._on_node_run_requested)
         self.view = NodeEditorView(self.scene, self)
 
         # 节点库
@@ -148,11 +149,16 @@ class MainWindow(QtWidgets.QMainWindow):
     # ========== 节点操作 ==========
 
     def _add_node_from_template(self, template: Dict[str, Any]) -> None:
+        exec_mode = template.get("exec_mode", "code")
         node = Node(
             name=template.get("name", "NewNode"),
             category="自定义",
+            exec_mode=exec_mode,
         )
         node.code = template.get("code", "")
+        # UI 节点用不同颜色
+        if exec_mode == "ui":
+            node.color = "#3A6EA5"
 
         for inp in template.get("inputs", []):
             node.add_input(
@@ -310,6 +316,48 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "执行失败", f"图结构错误: {e}")
         except RuntimeError as e:
             QtWidgets.QMessageBox.warning(self, "执行失败", str(e))
+
+    def _on_node_run_requested(self, node_id: str) -> None:
+        """
+        直接运行单个 UI 节点（不跑全图）。
+        收集该节点的输入（连线来源 + 默认值）后执行。
+        """
+        node = self.scene.graph.get_node(node_id)
+        if node is None:
+            return
+
+        # 收集传入该节点的输入值
+        inputs = {}
+        for sock in node.inputs:
+            connected = [
+                c for c in self.scene.graph.connections.values()
+                if c.target_node_id == node_id
+                and c.target_socket == sock.name
+            ]
+            if connected:
+                # 上游需要执行才能拿到值 → 这里只给默认值
+                # 直接运行模式下，上游未执行，所以用默认值
+                inputs[sock.name] = sock.default_value
+            else:
+                inputs[sock.name] = sock.default_value
+
+        try:
+            executor = Executor(self.scene.graph)
+            result = executor.execute_ui_node(node_id, inputs)
+
+            self.status_bar.showMessage(f"▶ 已运行 UI 节点: {node.name}")
+
+            # 显示结果摘要
+            if result:
+                result_str = ", ".join(f"{k}={v}" for k, v in result.items())
+                print(f"[NodeEditor] ▶ {node.name} → {result_str}")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.warning(
+                self, "运行失败",
+                f"节点 [{node.name}] 执行出错:\n{e}")
 
     def _export_script(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
